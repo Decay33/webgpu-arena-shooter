@@ -6,6 +6,9 @@ export function DebugOverlay() {
   const initializationState = useRendererStore(
     (state) => state.initializationState,
   )
+  const pointerLocked = useRendererStore((state) => state.pointerLocked)
+  const playerPosition = useRendererStore((state) => state.playerPosition)
+  const playerGrounded = useRendererStore((state) => state.playerGrounded)
 
   return (
     <aside className="debug-overlay">
@@ -26,6 +29,21 @@ export function DebugOverlay() {
           {fpsEstimate > 0 ? fpsEstimate : '--'}
         </span>
       </p>
+      <p className="debug-overlay__row">
+        <span className="debug-overlay__label">player</span>
+        <span className="debug-overlay__value">
+          {playerPosition.map((value) => value.toFixed(2)).join(', ')}
+        </span>
+      </p>
+      <p className="debug-overlay__row">
+        <span className="debug-overlay__label">grounded</span>
+        <span className="debug-overlay__value">
+          {playerGrounded ? 'yes' : 'no'}
+        </span>
+      </p>
+      {!pointerLocked ? (
+        <p className="debug-overlay__hint">Click to capture mouse</p>
+      ) : null}
     </aside>
   )
 }
