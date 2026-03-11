@@ -1,0 +1,54 @@
+.app-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #c9d2de;
+}
+
+.arena-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.debug-overlay {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 10;
+  min-width: 9.5rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(112, 126, 148, 0.28);
+  border-radius: 0.55rem;
+  background: rgba(8, 11, 16, 0.78);
+  box-shadow: 0 0.5rem 1.4rem rgba(0, 0, 0, 0.14);
+  color: #edf2f8;
+  font-family: Consolas, 'SFMono-Regular', Monaco, monospace;
+  pointer-events: none;
+}
+
+.debug-overlay__title {
+  margin: 0 0 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9cacbf;
+}
+
+.debug-overlay__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.debug-overlay__label {
+  color: #afbbcc;
+}
+
+.debug-overlay__value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
