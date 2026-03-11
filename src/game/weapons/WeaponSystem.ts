@@ -7,8 +7,15 @@ import { getCameraRay, raycastWorld } from '../combat/RaycastSystem.ts'
 import { applyDamageToEnemyByCollider } from '../enemies/EnemyRegistry.ts'
 import { usePlayerHealthStore } from '../player/health/playerHealthStore.ts'
 import { useRendererStore } from '../renderer/state/rendererStore.ts'
-import { createHitscanRifle } from './HitscanRifle.ts'
-import type { Weapon, WeaponRay, WeaponShotResult } from './WeaponTypes.ts'
+import { createWeaponById } from './WeaponRegistry.ts'
+import { usePlayerWeaponStore } from './playerWeaponStore.ts'
+import type {
+  Weapon,
+  WeaponId,
+  WeaponRay,
+  WeaponShotResult,
+  WeaponTraceResult,
+} from './WeaponTypes.ts'
 
 export type HitMarker = {
   id: number
@@ -70,17 +77,38 @@ function offsetAlongRay(
   ]
 }
 
+function getOrCreateWeaponInstance(
+  weaponInstances: Partial<Record<WeaponId, Weapon>>,
+  weaponId: WeaponId,
+): Weapon | null {
+  const existingWeapon = weaponInstances[weaponId]
+
+  if (existingWeapon) {
+    return existingWeapon
+  }
+
+  const nextWeapon = createWeaponById(weaponId)
+
+  if (!nextWeapon) {
+    return null
+  }
+
+  weaponInstances[weaponId] = nextWeapon
+  return nextWeapon
+}
+
 export function useWeaponSystem({
   bodyRef,
 }: WeaponSystemProps): WeaponEffectsState {
   const camera = useThree((state) => state.camera)
+  const currentWeaponId = usePlayerWeaponStore((state) => state.currentWeaponId)
   const playerAlive = usePlayerHealthStore((state) => state.alive)
   const pointerLocked = useRendererStore((state) => state.pointerLocked)
   const { rapier, world } = useRapier()
   const [hitMarkers, setHitMarkers] = useState<HitMarker[]>([])
   const [muzzleFlashes, setMuzzleFlashes] = useState<MuzzleFlash[]>([])
   const [tracers, setTracers] = useState<Tracer[]>([])
-  const equippedWeaponRef = useRef<Weapon>(createHitscanRifle())
+  const weaponInstancesRef = useRef<Partial<Record<WeaponId, Weapon>>>({})
   const effectIdRef = useRef(0)
   const effectTimeoutsRef = useRef<number[]>([])
 
@@ -119,16 +147,16 @@ export function useWeaponSystem({
       const position = offsetAlongRay(
         shotResult.ray.origin,
         shotResult.ray.direction,
-        shotResult.visuals.muzzleFlashDistance,
+        shotResult.definition.visuals.muzzleFlashDistance,
       )
 
       setMuzzleFlashes((currentFlashes) => [
         ...currentFlashes,
         {
-          color: shotResult.visuals.muzzleFlashColor,
+          color: shotResult.definition.visuals.muzzleFlashColor,
           id,
           position,
-          size: shotResult.visuals.muzzleFlashSize,
+          size: shotResult.definition.visuals.muzzleFlashSize,
         },
       ])
 
@@ -139,34 +167,34 @@ export function useWeaponSystem({
         effectTimeoutsRef.current = effectTimeoutsRef.current.filter(
           (trackedTimeoutId) => trackedTimeoutId !== timeoutId,
         )
-      }, shotResult.visuals.muzzleFlashLifetimeMs)
+      }, shotResult.definition.visuals.muzzleFlashLifetimeMs)
 
       effectTimeoutsRef.current.push(timeoutId)
     }
 
-    const spawnTracer = (shotResult: FiredShot) => {
+    const spawnTracer = (shotResult: FiredShot, trace: WeaponTraceResult) => {
       const id = effectIdRef.current++
       const start = offsetAlongRay(
         shotResult.ray.origin,
-        shotResult.ray.direction,
-        shotResult.visuals.muzzleFlashDistance,
+        trace.direction,
+        shotResult.definition.visuals.muzzleFlashDistance,
       )
       const end =
-        shotResult.hit?.point ??
+        trace.hit?.point ??
         offsetAlongRay(
           shotResult.ray.origin,
-          shotResult.ray.direction,
-          shotResult.maxDistance,
+          trace.direction,
+          shotResult.definition.maxDistance,
         )
 
       setTracers((currentTracers) => [
         ...currentTracers,
         {
-          color: shotResult.visuals.tracerColor,
+          color: shotResult.definition.visuals.tracerColor,
           end,
           id,
           start,
-          thickness: shotResult.visuals.tracerThickness,
+          thickness: shotResult.definition.visuals.tracerThickness,
         },
       ])
 
@@ -177,7 +205,7 @@ export function useWeaponSystem({
         effectTimeoutsRef.current = effectTimeoutsRef.current.filter(
           (trackedTimeoutId) => trackedTimeoutId !== timeoutId,
         )
-      }, shotResult.visuals.tracerLifetimeMs)
+      }, shotResult.definition.visuals.tracerLifetimeMs)
 
       effectTimeoutsRef.current.push(timeoutId)
     }
@@ -187,8 +215,17 @@ export function useWeaponSystem({
         return
       }
 
+      const equippedWeapon = getOrCreateWeaponInstance(
+        weaponInstancesRef.current,
+        currentWeaponId,
+      )
+
+      if (!equippedWeapon) {
+        return
+      }
+
       const shotRay = getCameraRay(camera)
-      const shotResult = equippedWeaponRef.current.tryFire({
+      const shotResult = equippedWeapon.tryFire({
         now: performance.now() / 1000,
         ray: shotRay,
         raycast: ({ direction, maxDistance, origin }) =>
@@ -212,22 +249,30 @@ export function useWeaponSystem({
       }
 
       spawnMuzzleFlash(firedShot)
-      spawnTracer(firedShot)
+      const hitPoints: [number, number, number][] = []
 
-      if (!shotResult.hit) {
-        return
+      shotResult.traces.forEach((trace) => {
+        spawnTracer(firedShot, trace)
+
+        if (!trace.hit) {
+          return
+        }
+
+        hitPoints.push(trace.hit.point)
+
+        if (trace.hit.targetType === 'enemy') {
+          applyDamageToEnemyByCollider(trace.hit.colliderHandle, {
+            amount: trace.damage,
+            source: shotResult.definition.id,
+          })
+        }
+
+        spawnHitMarker(trace.hit.point, trace.hit.normal)
+      })
+
+      if (hitPoints.length > 0) {
+        console.log(`${shotResult.definition.displayName} hit`, hitPoints)
       }
-
-      console.log('Hitscan rifle hit', shotResult.hit.point)
-
-      if (shotResult.hit.targetType === 'enemy') {
-        applyDamageToEnemyByCollider(shotResult.hit.colliderHandle, {
-          amount: shotResult.damage,
-          source: shotResult.weaponType,
-        })
-      }
-
-      spawnHitMarker(shotResult.hit.point, shotResult.hit.normal)
     }
 
     window.addEventListener('mousedown', handleMouseDown)
@@ -235,7 +280,7 @@ export function useWeaponSystem({
     return () => {
       window.removeEventListener('mousedown', handleMouseDown)
     }
-  }, [bodyRef, camera, playerAlive, pointerLocked, rapier, world])
+  }, [bodyRef, camera, currentWeaponId, playerAlive, pointerLocked, rapier, world])
 
   return {
     hitMarkers,

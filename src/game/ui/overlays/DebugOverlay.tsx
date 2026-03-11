@@ -1,5 +1,7 @@
 import { usePlayerHealthStore } from '../../player/health/playerHealthStore.ts'
 import { useRendererStore } from '../../renderer/state/rendererStore.ts'
+import { getWeaponDefinition } from '../../weapons/WeaponRegistry.ts'
+import { usePlayerWeaponStore } from '../../weapons/playerWeaponStore.ts'
 
 export function DebugOverlay() {
   const rendererMode = useRendererStore((state) => state.rendererMode)
@@ -18,6 +20,8 @@ export function DebugOverlay() {
   const respawnRemainingSeconds = usePlayerHealthStore(
     (state) => state.respawnRemainingSeconds,
   )
+  const currentWeaponId = usePlayerWeaponStore((state) => state.currentWeaponId)
+  const currentWeaponName = getWeaponDefinition(currentWeaponId).displayName
 
   return (
     <aside className="debug-overlay">
@@ -55,6 +59,10 @@ export function DebugOverlay() {
         <span className="debug-overlay__value">
           {playerCurrentHealth}/{playerMaxHealth}
         </span>
+      </p>
+      <p className="debug-overlay__row">
+        <span className="debug-overlay__label">weapon</span>
+        <span className="debug-overlay__value">{currentWeaponName}</span>
       </p>
       <p className="debug-overlay__row">
         <span className="debug-overlay__label">alive</span>

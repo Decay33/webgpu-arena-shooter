@@ -1,15 +1,12 @@
 import type {
   Weapon,
+  WeaponDefinition,
   WeaponFireContext,
   WeaponShotResult,
-  WeaponShotVisuals,
+  WeaponVisualSettings,
 } from './WeaponTypes.ts'
 
-const HITSCAN_RIFLE_COOLDOWN_SECONDS = 0.15
-const HITSCAN_RIFLE_DAMAGE = 34
-const HITSCAN_RIFLE_MAX_DISTANCE = 160
-const HITSCAN_RIFLE_TYPE = 'hitscanRifle'
-const HITSCAN_RIFLE_VISUALS: WeaponShotVisuals = {
+const HITSCAN_RIFLE_VISUALS: WeaponVisualSettings = {
   muzzleFlashColor: '#ffd166',
   muzzleFlashDistance: 0.55,
   muzzleFlashLifetimeMs: 55,
@@ -19,32 +16,46 @@ const HITSCAN_RIFLE_VISUALS: WeaponShotVisuals = {
   tracerThickness: 0.035,
 }
 
-export function createHitscanRifle(): Weapon {
+export const HITSCAN_RIFLE_DEFINITION: WeaponDefinition = {
+  cooldownSeconds: 0.15,
+  damage: 34,
+  displayName: 'Rifle',
+  fireType: 'hitscan',
+  id: 'rifle',
+  maxDistance: 160,
+  visuals: HITSCAN_RIFLE_VISUALS,
+}
+
+export function createHitscanRifle(
+  definition: WeaponDefinition = HITSCAN_RIFLE_DEFINITION,
+): Weapon {
   let lastFiredAt = Number.NEGATIVE_INFINITY
 
   const tryFire = (context: WeaponFireContext): WeaponShotResult | null => {
-    if (context.now - lastFiredAt < HITSCAN_RIFLE_COOLDOWN_SECONDS) {
+    if (context.now - lastFiredAt < definition.cooldownSeconds) {
       return null
     }
 
     lastFiredAt = context.now
 
     return {
-      damage: HITSCAN_RIFLE_DAMAGE,
-      hit: context.raycast({
-        direction: context.ray.direction,
-        maxDistance: HITSCAN_RIFLE_MAX_DISTANCE,
-        origin: context.ray.origin,
-      }),
-      maxDistance: HITSCAN_RIFLE_MAX_DISTANCE,
-      visuals: HITSCAN_RIFLE_VISUALS,
-      weaponType: HITSCAN_RIFLE_TYPE,
+      definition,
+      traces: [
+        {
+          damage: definition.damage,
+          direction: context.ray.direction,
+          hit: context.raycast({
+            direction: context.ray.direction,
+            maxDistance: definition.maxDistance,
+            origin: context.ray.origin,
+          }),
+        },
+      ],
     }
   }
 
   return {
-    cooldownSeconds: HITSCAN_RIFLE_COOLDOWN_SECONDS,
+    definition,
     tryFire,
-    type: HITSCAN_RIFLE_TYPE,
   }
 }

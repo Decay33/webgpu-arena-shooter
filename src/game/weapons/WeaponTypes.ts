@@ -1,8 +1,10 @@
 import type { HitResult } from '../combat/HitResult.ts'
 
-export type WeaponType = 'hitscanRifle'
+export type WeaponId = 'rifle' | 'shotgun' | 'rocketLauncher'
 
-export type WeaponShotVisuals = {
+export type WeaponFireType = 'hitscan' | 'projectile'
+
+export type WeaponVisualSettings = {
   muzzleFlashColor: string
   muzzleFlashDistance: number
   muzzleFlashLifetimeMs: number
@@ -29,16 +31,28 @@ export type WeaponFireContext = {
   raycast: (request: WeaponRaycastRequest) => HitResult | null
 }
 
-export type WeaponShotResult = {
+export type WeaponDefinition = {
+  cooldownSeconds: number
   damage: number
-  hit: HitResult | null
+  displayName: string
+  fireType: WeaponFireType
+  id: WeaponId
   maxDistance: number
-  visuals: WeaponShotVisuals
-  weaponType: WeaponType
+  visuals: WeaponVisualSettings
+}
+
+export type WeaponTraceResult = {
+  damage: number
+  direction: [number, number, number]
+  hit: HitResult | null
+}
+
+export type WeaponShotResult = {
+  definition: WeaponDefinition
+  traces: WeaponTraceResult[]
 }
 
 export type Weapon = {
-  cooldownSeconds: number
+  definition: WeaponDefinition
   tryFire: (context: WeaponFireContext) => WeaponShotResult | null
-  type: WeaponType
 }

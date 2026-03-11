@@ -17,6 +17,7 @@ import { usePlayerHealthStore } from '../health/playerHealthStore.ts'
 import { useRendererStore } from '../../renderer/state/rendererStore.ts'
 import { WeaponEffects } from '../../weapons/WeaponEffects.tsx'
 import { useWeaponSystem } from '../../weapons/WeaponSystem.ts'
+import { useWeaponSwitchInput } from '../../weapons/useWeaponSwitchInput.ts'
 import { PLAYER_COLLISION_GROUPS } from '../../../shared/constants/collisionGroups.ts'
 import { usePlayerInput } from './usePlayerInput.ts'
 
@@ -44,6 +45,8 @@ export function PlayerController({ bodyRef }: PlayerControllerProps) {
   const weaponEffects = useWeaponSystem({ bodyRef })
   const debugTimerRef = useRef(0)
   const jumpPressedRef = useRef(false)
+
+  useWeaponSwitchInput()
 
   useEffect(() => {
     return () => {

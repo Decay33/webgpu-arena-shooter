@@ -4,6 +4,7 @@ import { type RapierRigidBody, Physics } from '@react-three/rapier'
 
 import { PLAYER_WORLD_GRAVITY } from '../../config/playerMovement.ts'
 import { EnemySpawner } from '../../enemies/EnemySpawner.tsx'
+import { HealthPickupSpawner } from '../../pickups/health/HealthPickupSpawner.tsx'
 import { FirstPersonCamera } from '../../player/camera/FirstPersonCamera.tsx'
 import { PlayerController } from '../../player/controller/PlayerController.tsx'
 import { PlayerLifecycle } from '../../player/health/PlayerLifecycle.tsx'
@@ -36,6 +37,7 @@ export function TestRoomScene() {
         <TestRoomMap />
         <PlayerController bodyRef={playerBodyRef} />
         <PlayerLifecycle bodyRef={playerBodyRef} />
+        <HealthPickupSpawner playerBodyRef={playerBodyRef} />
         <EnemySpawner playerBodyRef={playerBodyRef} />
       </Physics>
 
