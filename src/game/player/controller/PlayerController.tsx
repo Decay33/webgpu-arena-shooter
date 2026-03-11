@@ -14,6 +14,8 @@ import {
   PLAYER_MOVEMENT_CONFIG,
 } from '../../config/playerMovement.ts'
 import { useRendererStore } from '../../renderer/state/rendererStore.ts'
+import { WeaponEffects } from '../../weapons/WeaponEffects.tsx'
+import { useWeaponSystem } from '../../weapons/WeaponSystem.ts'
 import { usePlayerInput } from './usePlayerInput.ts'
 
 type PlayerControllerProps = {
@@ -36,6 +38,7 @@ export function PlayerController({ bodyRef }: PlayerControllerProps) {
   const inputState = usePlayerInput()
   const pointerLocked = useRendererStore((state) => state.pointerLocked)
   const setPlayerDebug = useRendererStore((state) => state.setPlayerDebug)
+  const weaponEffects = useWeaponSystem({ bodyRef })
   const debugTimerRef = useRef(0)
   const jumpPressedRef = useRef(false)
 
@@ -143,22 +146,25 @@ export function PlayerController({ bodyRef }: PlayerControllerProps) {
   })
 
   return (
-    <RigidBody
-      ref={bodyRef}
-      ccd
-      colliders={false}
-      enabledRotations={[false, false, false]}
-      friction={0}
-      position={PLAYER_MOVEMENT_CONFIG.spawnPosition}
-      type="dynamic"
-    >
-      <CapsuleCollider
-        args={[
-          PLAYER_MOVEMENT_CONFIG.capsuleHalfHeight,
-          PLAYER_MOVEMENT_CONFIG.capsuleRadius,
-        ]}
+    <>
+      <RigidBody
+        ref={bodyRef}
+        ccd
+        colliders={false}
+        enabledRotations={[false, false, false]}
         friction={0}
-      />
-    </RigidBody>
+        position={PLAYER_MOVEMENT_CONFIG.spawnPosition}
+        type="dynamic"
+      >
+        <CapsuleCollider
+          args={[
+            PLAYER_MOVEMENT_CONFIG.capsuleHalfHeight,
+            PLAYER_MOVEMENT_CONFIG.capsuleRadius,
+          ]}
+          friction={0}
+        />
+      </RigidBody>
+      <WeaponEffects effects={weaponEffects} />
+    </>
   )
 }

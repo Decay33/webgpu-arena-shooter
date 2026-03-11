@@ -1,7 +1,7 @@
 import type { Vector3Tuple } from '@react-three/rapier'
 
 export const PLAYER_MOVEMENT_CONFIG = {
-  spawnPosition: [0, 2.2, 8] as const,
+  spawnPosition: [0, 2.2, 18] as const,
   capsuleRadius: 0.35,
   capsuleHalfHeight: 0.5,
   eyeHeight: 0.45,
