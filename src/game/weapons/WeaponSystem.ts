@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 
 import { type RapierRigidBody, useRapier } from '@react-three/rapier'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 
 import { getCameraRay, raycastWorld } from '../combat/RaycastSystem.ts'
 import { applyDamageToEnemyByCollider } from '../enemies/EnemyRegistry.ts'
+import { applyDamageToEnemiesInRadius } from '../enemies/EnemySystem.ts'
 import { usePlayerHealthStore } from '../player/health/playerHealthStore.ts'
 import { useRendererStore } from '../renderer/state/rendererStore.ts'
 import { createWeaponById } from './WeaponRegistry.ts'
@@ -12,6 +13,7 @@ import { usePlayerWeaponStore } from './playerWeaponStore.ts'
 import type {
   Weapon,
   WeaponId,
+  WeaponProjectileSpawn,
   WeaponRay,
   WeaponShotResult,
   WeaponTraceResult,
@@ -37,13 +39,27 @@ export type Tracer = {
   thickness: number
 }
 
+export type WeaponProjectile = WeaponProjectileSpawn & {
+  distanceTraveled: number
+  id: number
+}
+
+export type Explosion = {
+  color: string
+  id: number
+  position: [number, number, number]
+  size: number
+}
+
 export type WeaponSystemProps = {
   bodyRef: RefObject<RapierRigidBody | null>
 }
 
 export type WeaponEffectsState = {
+  explosions: Explosion[]
   hitMarkers: HitMarker[]
   muzzleFlashes: MuzzleFlash[]
+  projectiles: WeaponProjectile[]
   tracers: Tracer[]
 }
 
@@ -53,6 +69,7 @@ type FiredShot = WeaponShotResult & {
 
 const HIT_MARKER_LIFETIME_MS = 180
 const HIT_MARKER_NORMAL_OFFSET = 0.08
+const ROCKET_EXPLOSION_SOURCE = 'rocketLauncher:explosion'
 
 function offsetHitMarkerPosition(
   point: [number, number, number],
@@ -105,12 +122,19 @@ export function useWeaponSystem({
   const playerAlive = usePlayerHealthStore((state) => state.alive)
   const pointerLocked = useRendererStore((state) => state.pointerLocked)
   const { rapier, world } = useRapier()
+  const [explosions, setExplosions] = useState<Explosion[]>([])
   const [hitMarkers, setHitMarkers] = useState<HitMarker[]>([])
   const [muzzleFlashes, setMuzzleFlashes] = useState<MuzzleFlash[]>([])
+  const [projectiles, setProjectiles] = useState<WeaponProjectile[]>([])
   const [tracers, setTracers] = useState<Tracer[]>([])
   const weaponInstancesRef = useRef<Partial<Record<WeaponId, Weapon>>>({})
+  const projectilesRef = useRef<WeaponProjectile[]>([])
   const effectIdRef = useRef(0)
   const effectTimeoutsRef = useRef<number[]>([])
+
+  useEffect(() => {
+    projectilesRef.current = projectiles
+  }, [projectiles])
 
   useEffect(() => {
     return () => {
@@ -170,6 +194,26 @@ export function useWeaponSystem({
       }, shotResult.definition.visuals.muzzleFlashLifetimeMs)
 
       effectTimeoutsRef.current.push(timeoutId)
+    }
+
+    const spawnProjectile = (projectile: WeaponProjectileSpawn) => {
+      const id = effectIdRef.current++
+      const nextProjectile: WeaponProjectile = {
+        ...projectile,
+        distanceTraveled: 0,
+        id,
+        position: offsetAlongRay(
+          projectile.position,
+          projectile.direction,
+          projectile.size + 0.75,
+        ),
+      }
+
+      setProjectiles((currentProjectiles) => {
+        const nextProjectiles = [...currentProjectiles, nextProjectile]
+        projectilesRef.current = nextProjectiles
+        return nextProjectiles
+      })
     }
 
     const spawnTracer = (shotResult: FiredShot, trace: WeaponTraceResult) => {
@@ -249,6 +293,10 @@ export function useWeaponSystem({
       }
 
       spawnMuzzleFlash(firedShot)
+      shotResult.projectiles.forEach((projectile) => {
+        spawnProjectile(projectile)
+      })
+
       const hitPoints: [number, number, number][] = []
 
       shotResult.traces.forEach((trace) => {
@@ -282,9 +330,111 @@ export function useWeaponSystem({
     }
   }, [bodyRef, camera, currentWeaponId, playerAlive, pointerLocked, rapier, world])
 
+  useFrame((_, delta) => {
+    const activeProjectiles = projectilesRef.current
+
+    if (activeProjectiles.length === 0) {
+      return
+    }
+
+    const spawnExplosion = (
+      projectile: WeaponProjectile,
+      position: [number, number, number],
+    ) => {
+      const id = effectIdRef.current++
+
+      setExplosions((currentExplosions) => [
+        ...currentExplosions,
+        {
+          color: projectile.explosionColor,
+          id,
+          position,
+          size: projectile.explosionSize,
+        },
+      ])
+
+      const timeoutId = window.setTimeout(() => {
+        setExplosions((currentExplosions) =>
+          currentExplosions.filter((explosion) => explosion.id !== id),
+        )
+        effectTimeoutsRef.current = effectTimeoutsRef.current.filter(
+          (trackedTimeoutId) => trackedTimeoutId !== timeoutId,
+        )
+      }, projectile.explosionLifetimeMs)
+
+      effectTimeoutsRef.current.push(timeoutId)
+    }
+
+    const nextProjectiles: WeaponProjectile[] = []
+
+    activeProjectiles.forEach((projectile) => {
+      const stepDistance = projectile.speed * delta
+      const hit = raycastWorld({
+        direction: projectile.direction,
+        excludeRigidBody: bodyRef.current,
+        maxDistance: stepDistance,
+        origin: projectile.position,
+        rapier,
+        world,
+      })
+
+      if (hit) {
+        const damagedEnemies = applyDamageToEnemiesInRadius(
+          hit.point,
+          projectile.blastRadius,
+          {
+            amount: projectile.damage,
+            source: ROCKET_EXPLOSION_SOURCE,
+          },
+        )
+
+        console.log('Rocket exploded', hit.point, `${damagedEnemies} enemies hit`)
+        spawnExplosion(projectile, hit.point)
+        return
+      }
+
+      const nextDistanceTraveled = projectile.distanceTraveled + stepDistance
+      const nextPosition = offsetAlongRay(
+        projectile.position,
+        projectile.direction,
+        stepDistance,
+      )
+
+      if (nextDistanceTraveled >= projectile.maxDistance) {
+        const damagedEnemies = applyDamageToEnemiesInRadius(
+          nextPosition,
+          projectile.blastRadius,
+          {
+            amount: projectile.damage,
+            source: ROCKET_EXPLOSION_SOURCE,
+          },
+        )
+
+        console.log(
+          'Rocket exploded',
+          nextPosition,
+          `${damagedEnemies} enemies hit`,
+        )
+        spawnExplosion(projectile, nextPosition)
+        return
+      }
+
+      nextProjectiles.push({
+        ...projectile,
+        distanceTraveled: nextDistanceTraveled,
+        position: nextPosition,
+      })
+    })
+
+    projectilesRef.current = nextProjectiles
+    setProjectiles(nextProjectiles)
+  })
+
   return {
+    explosions,
     hitMarkers,
     muzzleFlashes,
+    projectiles,
     tracers,
   }
 }

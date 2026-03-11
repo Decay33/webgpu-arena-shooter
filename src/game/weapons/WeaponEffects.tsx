@@ -76,6 +76,13 @@ export function WeaponEffects({ effects }: WeaponEffectsProps) {
         </mesh>
       ))}
 
+      {effects.projectiles.map((projectile) => (
+        <mesh key={projectile.id} position={projectile.position}>
+          <sphereGeometry args={[projectile.size, 10, 10]} />
+          <meshBasicMaterial color={projectile.color} toneMapped={false} />
+        </mesh>
+      ))}
+
       {effects.tracers.map((tracer) => (
         <TracerBeam
           key={tracer.id}
@@ -84,6 +91,19 @@ export function WeaponEffects({ effects }: WeaponEffectsProps) {
           start={tracer.start}
           thickness={tracer.thickness}
         />
+      ))}
+
+      {effects.explosions.map((explosion) => (
+        <mesh key={explosion.id} position={explosion.position}>
+          <sphereGeometry args={[explosion.size, 12, 12]} />
+          <meshBasicMaterial
+            color={explosion.color}
+            depthWrite={false}
+            opacity={0.32}
+            toneMapped={false}
+            transparent
+          />
+        </mesh>
       ))}
     </>
   )

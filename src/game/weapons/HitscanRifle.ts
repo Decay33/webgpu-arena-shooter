@@ -40,6 +40,7 @@ export function createHitscanRifle(
 
     return {
       definition,
+      projectiles: [],
       traces: [
         {
           damage: definition.damage,

@@ -93,6 +93,7 @@ export function createHitscanShotgun(
 
     return {
       definition,
+      projectiles: [],
       traces: SHOTGUN_PELLET_PATTERN.map(([horizontalOffset, verticalOffset]) => {
         const direction = getSpreadDirection(
           context.ray.direction,

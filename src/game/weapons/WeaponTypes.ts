@@ -47,8 +47,23 @@ export type WeaponTraceResult = {
   hit: HitResult | null
 }
 
+export type WeaponProjectileSpawn = {
+  blastRadius: number
+  color: string
+  damage: number
+  direction: [number, number, number]
+  explosionColor: string
+  explosionLifetimeMs: number
+  explosionSize: number
+  maxDistance: number
+  position: [number, number, number]
+  size: number
+  speed: number
+}
+
 export type WeaponShotResult = {
   definition: WeaponDefinition
+  projectiles: WeaponProjectileSpawn[]
   traces: WeaponTraceResult[]
 }
 

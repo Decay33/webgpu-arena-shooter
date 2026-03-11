@@ -126,6 +126,37 @@ export function setEnemyRuntimePosition(
   enemyPositionSnapshots.set(enemyId, position)
 }
 
+export function applyDamageToEnemiesInRadius(
+  center: [number, number, number],
+  radius: number,
+  damageEvent: DamageEvent,
+) {
+  const { damageEnemy, enemies } = useEnemyStore.getState()
+  let damagedEnemies = 0
+
+  enemies.forEach((enemy) => {
+    if (!enemy.alive) {
+      return
+    }
+
+    const enemyPosition = getSnapshotPosition(enemy.id, enemy.position)
+    const distanceToExplosion = Math.hypot(
+      center[0] - enemyPosition[0],
+      center[1] - (enemyPosition[1] + ENEMY_HALF_HEIGHT),
+      center[2] - enemyPosition[2],
+    )
+
+    if (distanceToExplosion > radius) {
+      return
+    }
+
+    damageEnemy(enemy.id, damageEvent)
+    damagedEnemies += 1
+  })
+
+  return damagedEnemies
+}
+
 export function useEnemySystem() {
   const damageEnemy = useEnemyStore((state) => state.damageEnemy)
   const enemies = useEnemyStore((state) => state.enemies)
