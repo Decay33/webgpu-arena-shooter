@@ -1,6 +1,9 @@
 import { usePlayerHealthStore } from '../../player/health/playerHealthStore.ts'
 import { useRendererStore } from '../../renderer/state/rendererStore.ts'
-import { getWeaponDefinition } from '../../weapons/WeaponRegistry.ts'
+import {
+  getWeaponDefinition,
+  WEAPON_SLOT_ORDER,
+} from '../../weapons/WeaponRegistry.ts'
 import { usePlayerWeaponStore } from '../../weapons/playerWeaponStore.ts'
 
 export function DebugOverlay() {
@@ -21,7 +24,13 @@ export function DebugOverlay() {
     (state) => state.respawnRemainingSeconds,
   )
   const currentWeaponId = usePlayerWeaponStore((state) => state.currentWeaponId)
+  const unlockedWeapons = usePlayerWeaponStore((state) => state.unlockedWeapons)
   const currentWeaponName = getWeaponDefinition(currentWeaponId).displayName
+  const unlockedWeaponNames = WEAPON_SLOT_ORDER.filter(
+    (weaponId) => unlockedWeapons[weaponId],
+  )
+    .map((weaponId) => getWeaponDefinition(weaponId).displayName)
+    .join(', ')
 
   return (
     <aside className="debug-overlay">
@@ -63,6 +72,10 @@ export function DebugOverlay() {
       <p className="debug-overlay__row">
         <span className="debug-overlay__label">weapon</span>
         <span className="debug-overlay__value">{currentWeaponName}</span>
+      </p>
+      <p className="debug-overlay__row">
+        <span className="debug-overlay__label">unlocked</span>
+        <span className="debug-overlay__value">{unlockedWeaponNames}</span>
       </p>
       <p className="debug-overlay__row">
         <span className="debug-overlay__label">alive</span>

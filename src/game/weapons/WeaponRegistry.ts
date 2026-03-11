@@ -21,11 +21,7 @@ export const WEAPON_SLOT_ORDER: WeaponId[] = [
   'rocketLauncher',
 ]
 
-export const INITIAL_UNLOCKED_WEAPON_IDS: WeaponId[] = [
-  'rifle',
-  'shotgun',
-  'rocketLauncher',
-]
+export const INITIAL_UNLOCKED_WEAPON_IDS: WeaponId[] = ['rifle']
 
 export function getWeaponDefinition(weaponId: WeaponId): WeaponDefinition {
   return WEAPON_DEFINITIONS[weaponId]
