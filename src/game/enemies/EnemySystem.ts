@@ -19,6 +19,13 @@ export const ENEMY_MOVEMENT_CONFIG = {
   snapshotInterval: 0.15,
 }
 
+export const ENEMY_COMBAT_CONFIG = {
+  contactDamage: 12,
+  contactDamageIntervalSeconds: 0.85,
+  contactDamageRadius: 2.35,
+  contactVerticalTolerance: 2.5,
+}
+
 export const ENEMY_HALF_HEIGHT = 1
 
 const enemyPositionSnapshots = new Map<EnemyId, [number, number, number]>()

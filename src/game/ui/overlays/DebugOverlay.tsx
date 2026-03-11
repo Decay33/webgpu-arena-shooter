@@ -1,3 +1,4 @@
+import { usePlayerHealthStore } from '../../player/health/playerHealthStore.ts'
 import { useRendererStore } from '../../renderer/state/rendererStore.ts'
 
 export function DebugOverlay() {
@@ -9,6 +10,14 @@ export function DebugOverlay() {
   const pointerLocked = useRendererStore((state) => state.pointerLocked)
   const playerPosition = useRendererStore((state) => state.playerPosition)
   const playerGrounded = useRendererStore((state) => state.playerGrounded)
+  const playerAlive = usePlayerHealthStore((state) => state.alive)
+  const playerCurrentHealth = usePlayerHealthStore(
+    (state) => state.currentHealth,
+  )
+  const playerMaxHealth = usePlayerHealthStore((state) => state.maxHealth)
+  const respawnRemainingSeconds = usePlayerHealthStore(
+    (state) => state.respawnRemainingSeconds,
+  )
 
   return (
     <aside className="debug-overlay">
@@ -41,6 +50,26 @@ export function DebugOverlay() {
           {playerGrounded ? 'yes' : 'no'}
         </span>
       </p>
+      <p className="debug-overlay__row">
+        <span className="debug-overlay__label">health</span>
+        <span className="debug-overlay__value">
+          {playerCurrentHealth}/{playerMaxHealth}
+        </span>
+      </p>
+      <p className="debug-overlay__row">
+        <span className="debug-overlay__label">alive</span>
+        <span className="debug-overlay__value">
+          {playerAlive ? 'yes' : 'no'}
+        </span>
+      </p>
+      {respawnRemainingSeconds !== null ? (
+        <p className="debug-overlay__row">
+          <span className="debug-overlay__label">respawn</span>
+          <span className="debug-overlay__value">
+            {respawnRemainingSeconds.toFixed(1)}s
+          </span>
+        </p>
+      ) : null}
       {!pointerLocked ? (
         <p className="debug-overlay__hint">Click to capture mouse</p>
       ) : null}

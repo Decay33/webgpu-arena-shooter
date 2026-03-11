@@ -5,6 +5,7 @@ import { useThree } from '@react-three/fiber'
 
 import { getCameraRay, raycastWorld } from '../combat/RaycastSystem.ts'
 import { applyDamageToEnemyByCollider } from '../enemies/EnemyRegistry.ts'
+import { usePlayerHealthStore } from '../player/health/playerHealthStore.ts'
 import { useRendererStore } from '../renderer/state/rendererStore.ts'
 import { createHitscanRifle } from './HitscanRifle.ts'
 import type { Weapon, WeaponRay, WeaponShotResult } from './WeaponTypes.ts'
@@ -73,6 +74,7 @@ export function useWeaponSystem({
   bodyRef,
 }: WeaponSystemProps): WeaponEffectsState {
   const camera = useThree((state) => state.camera)
+  const playerAlive = usePlayerHealthStore((state) => state.alive)
   const pointerLocked = useRendererStore((state) => state.pointerLocked)
   const { rapier, world } = useRapier()
   const [hitMarkers, setHitMarkers] = useState<HitMarker[]>([])
@@ -181,7 +183,7 @@ export function useWeaponSystem({
     }
 
     const handleMouseDown = (event: MouseEvent) => {
-      if (event.button !== 0 || !pointerLocked) {
+      if (event.button !== 0 || !pointerLocked || !playerAlive) {
         return
       }
 
@@ -233,7 +235,7 @@ export function useWeaponSystem({
     return () => {
       window.removeEventListener('mousedown', handleMouseDown)
     }
-  }, [bodyRef, camera, pointerLocked, rapier, world])
+  }, [bodyRef, camera, playerAlive, pointerLocked, rapier, world])
 
   return {
     hitMarkers,

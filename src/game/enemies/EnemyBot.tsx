@@ -13,11 +13,16 @@ import { Vector3 } from 'three'
 import type { DamageEvent } from '../health/HealthTypes.ts'
 import { ENEMY_COLLISION_GROUPS } from '../../shared/constants/collisionGroups.ts'
 import {
+  damagePlayer,
+  getPlayerHealthSnapshot,
+} from '../player/health/playerHealthStore.ts'
+import {
   registerEnemyCollider,
   registerEnemyDamageHandler,
   unregisterEnemyCollider,
 } from './EnemyRegistry.ts'
 import {
+  ENEMY_COMBAT_CONFIG,
   ENEMY_HALF_HEIGHT,
   ENEMY_MOVEMENT_CONFIG,
   getEnemyRuntimePosition,
@@ -47,6 +52,7 @@ function toPositionTuple(position: { x: number; y: number; z: number }) {
 export function EnemyBot({ enemy, onDamage, playerBodyRef }: EnemyBotProps) {
   const bodyRef = useRef<RapierRigidBody | null>(null)
   const colliderRef = useRef<RapierCollider | null>(null)
+  const lastContactDamageAtRef = useRef(Number.NEGATIVE_INFINITY)
   const lastPositionRef = useRef<[number, number, number]>(
     getEnemyRuntimePosition(enemy.id, enemy.position),
   )
@@ -90,8 +96,9 @@ export function EnemyBot({ enemy, onDamage, playerBodyRef }: EnemyBotProps) {
 
     const currentVelocity = body.linvel()
     const playerBody = playerBodyRef.current
+    const playerHealthSnapshot = getPlayerHealthSnapshot()
 
-    if (!playerBody) {
+    if (!playerBody || !playerHealthSnapshot.alive) {
       body.setLinvel(
         {
           x: 0,
@@ -103,6 +110,7 @@ export function EnemyBot({ enemy, onDamage, playerBodyRef }: EnemyBotProps) {
       return
     }
 
+    const nowSeconds = performance.now() / 1000
     const enemyTranslation = body.translation()
     const enemyPosition = toPositionTuple(enemyTranslation)
     lastPositionRef.current = enemyPosition
@@ -119,6 +127,9 @@ export function EnemyBot({ enemy, onDamage, playerBodyRef }: EnemyBotProps) {
       groundHit !== null &&
       groundHit.normal.y >= ENEMY_MOVEMENT_CONFIG.minGroundNormalY
     const playerTranslation = playerBody.translation()
+    const verticalDistanceToPlayer = Math.abs(
+      playerTranslation.y - enemyTranslation.y,
+    )
 
     PURSUIT_VECTOR.set(
       playerTranslation.x - enemyTranslation.x,
@@ -134,6 +145,22 @@ export function EnemyBot({ enemy, onDamage, playerBodyRef }: EnemyBotProps) {
       playerTranslation.x - enemyTranslation.x,
       playerTranslation.z - enemyTranslation.z,
     )
+    const isWithinContactRange =
+      planarDistanceToPlayer <= ENEMY_COMBAT_CONFIG.contactDamageRadius &&
+      verticalDistanceToPlayer <= ENEMY_COMBAT_CONFIG.contactVerticalTolerance
+
+    if (
+      isWithinContactRange &&
+      nowSeconds - lastContactDamageAtRef.current >=
+        ENEMY_COMBAT_CONFIG.contactDamageIntervalSeconds
+    ) {
+      damagePlayer({
+        amount: ENEMY_COMBAT_CONFIG.contactDamage,
+        source: `${enemy.id}:contact`,
+      })
+      lastContactDamageAtRef.current = nowSeconds
+    }
+
     const shouldChase =
       planarDistanceToPlayer > ENEMY_MOVEMENT_CONFIG.stopDistance
     const targetVelocityX = shouldChase

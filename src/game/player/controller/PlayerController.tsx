@@ -13,6 +13,7 @@ import {
   PLAYER_HALF_HEIGHT,
   PLAYER_MOVEMENT_CONFIG,
 } from '../../config/playerMovement.ts'
+import { usePlayerHealthStore } from '../health/playerHealthStore.ts'
 import { useRendererStore } from '../../renderer/state/rendererStore.ts'
 import { WeaponEffects } from '../../weapons/WeaponEffects.tsx'
 import { useWeaponSystem } from '../../weapons/WeaponSystem.ts'
@@ -37,6 +38,7 @@ export function PlayerController({ bodyRef }: PlayerControllerProps) {
   const camera = useThree((state) => state.camera)
   const { rapier, world } = useRapier()
   const inputState = usePlayerInput()
+  const playerAlive = usePlayerHealthStore((state) => state.alive)
   const pointerLocked = useRendererStore((state) => state.pointerLocked)
   const setPlayerDebug = useRendererStore((state) => state.setPlayerDebug)
   const weaponEffects = useWeaponSystem({ bodyRef })
@@ -53,6 +55,12 @@ export function PlayerController({ bodyRef }: PlayerControllerProps) {
     const rigidBody = bodyRef.current
 
     if (!rigidBody) {
+      return
+    }
+
+    if (!playerAlive) {
+      jumpPressedRef.current = inputState.jump
+      rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true)
       return
     }
 
