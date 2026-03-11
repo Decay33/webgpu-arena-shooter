@@ -1,0 +1,71 @@
+---
+description: Enforce the arena shooter source layout from the start.
+alwaysApply: true
+---
+
+Use this project structure for all new code unless the user explicitly approves a change:
+
+```text
+src/
+  app/
+    App.tsx
+    routes/
+    providers/
+  game/
+    config/
+    core/
+      gameLoop/
+      state/
+      events/
+      timing/
+    renderer/
+      canvas/
+      lighting/
+      postfx/
+      materials/
+      webgpu/
+    world/
+      map/
+      props/
+      spawn/
+      navigation/
+    player/
+      controller/
+      camera/
+      weapons/
+      inventory/
+      health/
+    enemies/
+      types/
+      ai/
+      spawning/
+      combat/
+    pickups/
+      weaponPads/
+      health/
+      armor/
+      ammo/
+    ui/
+      hud/
+      menus/
+      overlays/
+      crosshair/
+    audio/
+    assets/
+      models/
+      textures/
+      audio/
+  shared/
+    types/
+    utils/
+    constants/
+```
+
+Placement rules:
+
+- Keep React app composition, routes, and providers under `src/app`.
+- Keep gameplay code under `src/game`.
+- Keep reusable cross-cutting types, constants, and utilities under `src/shared`.
+- Do not create new top-level folders under `src` without explicit approval.
+- Do not place renderer, world, player, enemy, pickup, or UI gameplay systems outside their matching `src/game/*` domains.
+- When adding a new file, choose the most specific existing folder first instead of creating a parallel structure.
