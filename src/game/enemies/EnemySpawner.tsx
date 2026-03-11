@@ -1,7 +1,15 @@
+import type { RefObject } from 'react'
+
+import type { RapierRigidBody } from '@react-three/rapier'
+
 import { EnemyBot } from './EnemyBot.tsx'
 import { useEnemySystem } from './EnemySystem.ts'
 
-export function EnemySpawner() {
+type EnemySpawnerProps = {
+  playerBodyRef: RefObject<RapierRigidBody | null>
+}
+
+export function EnemySpawner({ playerBodyRef }: EnemySpawnerProps) {
   const { damageEnemy, enemies } = useEnemySystem()
 
   return (
@@ -9,7 +17,12 @@ export function EnemySpawner() {
       {enemies
         .filter((enemy) => enemy.alive)
         .map((enemy) => (
-          <EnemyBot enemy={enemy} key={enemy.id} onDamage={damageEnemy} />
+          <EnemyBot
+            enemy={enemy}
+            key={enemy.id}
+            onDamage={damageEnemy}
+            playerBodyRef={playerBodyRef}
+          />
         ))}
     </>
   )

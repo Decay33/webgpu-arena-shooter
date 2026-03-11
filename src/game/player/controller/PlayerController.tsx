@@ -16,6 +16,7 @@ import {
 import { useRendererStore } from '../../renderer/state/rendererStore.ts'
 import { WeaponEffects } from '../../weapons/WeaponEffects.tsx'
 import { useWeaponSystem } from '../../weapons/WeaponSystem.ts'
+import { PLAYER_COLLISION_GROUPS } from '../../../shared/constants/collisionGroups.ts'
 import { usePlayerInput } from './usePlayerInput.ts'
 
 type PlayerControllerProps = {
@@ -161,6 +162,7 @@ export function PlayerController({ bodyRef }: PlayerControllerProps) {
             PLAYER_MOVEMENT_CONFIG.capsuleHalfHeight,
             PLAYER_MOVEMENT_CONFIG.capsuleRadius,
           ]}
+          collisionGroups={PLAYER_COLLISION_GROUPS}
           friction={0}
         />
       </RigidBody>

@@ -1,5 +1,7 @@
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 
+import { WORLD_COLLISION_GROUPS } from '../../../shared/constants/collisionGroups.ts'
+
 type GreyboxBlockDefinition = {
   key: string
   position: [number, number, number]
@@ -153,7 +155,10 @@ function GreyboxBlock({
         <boxGeometry args={size} />
         <meshStandardMaterial color={color} metalness={0} roughness={1} />
       </mesh>
-      <CuboidCollider args={[size[0] / 2, size[1] / 2, size[2] / 2]} />
+      <CuboidCollider
+        args={[size[0] / 2, size[1] / 2, size[2] / 2]}
+        collisionGroups={WORLD_COLLISION_GROUPS}
+      />
     </RigidBody>
   )
 }

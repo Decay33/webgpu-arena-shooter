@@ -33,8 +33,8 @@ export function TestRoomScene() {
 
       <Physics colliders={false} gravity={PLAYER_WORLD_GRAVITY}>
         <TestRoomMap />
-        <EnemySpawner />
         <PlayerController bodyRef={playerBodyRef} />
+        <EnemySpawner playerBodyRef={playerBodyRef} />
       </Physics>
 
       <FirstPersonCamera bodyRef={playerBodyRef} />
