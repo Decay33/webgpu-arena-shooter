@@ -21,6 +21,7 @@ type WeaponPickupStore = {
   collectPickup: (pickupId: WeaponPickupId) => void
   pickups: WeaponPickupState[]
   refreshRespawns: (nowMs: number) => void
+  resetPickups: () => void
 }
 
 function createInitialPickupState(
@@ -97,4 +98,12 @@ export const useWeaponPickupStore = create<WeaponPickupStore>((set) => ({
         pickups: nextPickups,
       }
     }),
+  resetPickups: () =>
+    set({
+      pickups: WEAPON_PICKUP_SPAWNS.map(createInitialPickupState),
+    }),
 }))
+
+export function resetWeaponPickups() {
+  useWeaponPickupStore.getState().resetPickups()
+}

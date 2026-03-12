@@ -17,6 +17,7 @@ import { usePlayerHealthStore } from '../health/playerHealthStore.ts'
 import { useRendererStore } from '../../renderer/state/rendererStore.ts'
 import { WeaponEffects } from '../../weapons/WeaponEffects.tsx'
 import { useWeaponSystem } from '../../weapons/WeaponSystem.ts'
+import { WeaponViewmodel } from '../../weapons/WeaponViewmodel.tsx'
 import { useWeaponSwitchInput } from '../../weapons/useWeaponSwitchInput.ts'
 import { PLAYER_COLLISION_GROUPS } from '../../../shared/constants/collisionGroups.ts'
 import { usePlayerInput } from './usePlayerInput.ts'
@@ -30,6 +31,10 @@ const UP_VECTOR = new Vector3(0, 1, 0)
 const FORWARD_VECTOR = new Vector3()
 const RIGHT_VECTOR = new Vector3()
 const MOVE_VECTOR = new Vector3()
+
+function getVelocityStep(rate: number, delta: number) {
+  return Math.min(1, rate * delta)
+}
 
 function clampPlayerDebugValue(value: number) {
   return Number(value.toFixed(2))
@@ -115,7 +120,14 @@ export function PlayerController({ bodyRef }: PlayerControllerProps) {
       pointerLocked && isMoving ? targetSpeed : 0
     const targetVelocityX = MOVE_VECTOR.x * horizontalVelocityScale
     const targetVelocityZ = MOVE_VECTOR.z * horizontalVelocityScale
-    const controlStrength = isGrounded ? 1 : PLAYER_MOVEMENT_CONFIG.airControl
+    const accelerationRate = isGrounded
+      ? isMoving
+        ? PLAYER_MOVEMENT_CONFIG.groundAcceleration
+        : PLAYER_MOVEMENT_CONFIG.groundDeceleration
+      : isMoving
+        ? PLAYER_MOVEMENT_CONFIG.airAcceleration
+        : PLAYER_MOVEMENT_CONFIG.airDeceleration
+    const velocityStep = getVelocityStep(accelerationRate, delta)
 
     let nextVelocityY = currentVelocity.y
 
@@ -129,11 +141,11 @@ export function PlayerController({ bodyRef }: PlayerControllerProps) {
       {
         x:
           currentVelocity.x +
-          (targetVelocityX - currentVelocity.x) * controlStrength,
+          (targetVelocityX - currentVelocity.x) * velocityStep,
         y: nextVelocityY,
         z:
           currentVelocity.z +
-          (targetVelocityZ - currentVelocity.z) * controlStrength,
+          (targetVelocityZ - currentVelocity.z) * velocityStep,
       },
       true,
     )
@@ -178,6 +190,7 @@ export function PlayerController({ bodyRef }: PlayerControllerProps) {
         />
       </RigidBody>
       <WeaponEffects effects={weaponEffects} />
+      <WeaponViewmodel shotSequence={weaponEffects.shotSequence} />
     </>
   )
 }

@@ -3,10 +3,7 @@ import { useEffect, useRef, type RefObject } from 'react'
 import type { RapierRigidBody } from '@react-three/rapier'
 import { useFrame } from '@react-three/fiber'
 
-import {
-  PLAYER_HEALTH_CONFIG,
-  usePlayerHealthStore,
-} from './playerHealthStore.ts'
+import { usePlayerHealthStore } from './playerHealthStore.ts'
 
 type PlayerLifecycleProps = {
   bodyRef: RefObject<RapierRigidBody | null>
@@ -24,10 +21,6 @@ function unfreezeBody(body: RapierRigidBody) {
 
 export function PlayerLifecycle({ bodyRef }: PlayerLifecycleProps) {
   const alive = usePlayerHealthStore((state) => state.alive)
-  const respawnDeadlineMs = usePlayerHealthStore(
-    (state) => state.respawnDeadlineMs,
-  )
-  const respawnPlayer = usePlayerHealthStore((state) => state.respawnPlayer)
   const setRespawnRemainingSeconds = usePlayerHealthStore(
     (state) => state.setRespawnRemainingSeconds,
   )
@@ -51,38 +44,12 @@ export function PlayerLifecycle({ bodyRef }: PlayerLifecycleProps) {
         freezeBody(body)
         bodyFrozenRef.current = true
       }
+      return
+    }
 
-      if (respawnDeadlineMs === null) {
-        return
-      }
-
-      const remainingSeconds = Math.max(
-        0,
-        (respawnDeadlineMs - performance.now()) / 1000,
-      )
-      const roundedRemainingSeconds =
-        remainingSeconds > 0 ? Number(remainingSeconds.toFixed(1)) : 0
-
-      setRespawnRemainingSeconds(roundedRemainingSeconds)
-
-      if (remainingSeconds > 0) {
-        return
-      }
-
+    if (bodyFrozenRef.current) {
       unfreezeBody(body)
-      body.setTranslation(
-        {
-          x: PLAYER_HEALTH_CONFIG.respawnPosition[0],
-          y: PLAYER_HEALTH_CONFIG.respawnPosition[1],
-          z: PLAYER_HEALTH_CONFIG.respawnPosition[2],
-        },
-        true,
-      )
-      body.setLinvel({ x: 0, y: 0, z: 0 }, true)
-      body.setAngvel({ x: 0, y: 0, z: 0 }, true)
-      body.wakeUp()
       bodyFrozenRef.current = false
-      respawnPlayer()
     }
   })
 

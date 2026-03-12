@@ -1,18 +1,23 @@
 import type { Vector3Tuple } from '@react-three/rapier'
 
+import { GREYBOX_ARENA_PLAYER_SPAWN_POSITION } from '../world/map/greyboxArenaLayout.ts'
+
 export const PLAYER_MOVEMENT_CONFIG = {
-  spawnPosition: [0, 2.2, 18] as const,
+  spawnPosition: GREYBOX_ARENA_PLAYER_SPAWN_POSITION,
   capsuleRadius: 0.35,
   capsuleHalfHeight: 0.5,
   eyeHeight: 0.45,
-  walkSpeed: 5.75,
-  sprintMultiplier: 1.55,
-  jumpVelocity: 8.5,
-  gravity: -24,
-  airControl: 0.18,
+  walkSpeed: 6.25,
+  sprintMultiplier: 1.34,
+  jumpVelocity: 9.15,
+  gravity: -29,
+  groundAcceleration: 20,
+  groundDeceleration: 16,
+  airAcceleration: 6.5,
+  airDeceleration: 3.5,
   groundProbeDistance: 0.16,
   minGroundNormalY: 0.7,
-  pointerSpeed: 0.7,
+  pointerSpeed: 0.72,
   debugSampleInterval: 0.1,
 }
 

@@ -1,31 +1,12 @@
 import type { EnemyKind, EnemySpawnDefinition } from './EnemyTypes.ts'
+import { GREYBOX_ARENA_ENEMY_SPAWN_ANCHORS } from '../world/map/greyboxArenaLayout.ts'
 
 type EnemyWaveComposition = Record<EnemyKind, number>
 
 export const ENEMY_WAVE_CONFIG = {
-  intermissionDelaySeconds: 3,
+  intermissionDelaySeconds: 1.75,
   waveCompleteBonus: 50,
 } as const
-
-const ENEMY_SPAWN_ANCHORS: Record<EnemyKind, [number, number, number][]> = {
-  fast: [
-    [-18, 0, 10],
-    [10, 0, -18],
-    [-4, 0, 18],
-    [18, 0, -6],
-  ],
-  standard: [
-    [0, 0, -18],
-    [14, 0, 8],
-    [-20, 0, -10],
-    [6, 0, 18],
-  ],
-  tank: [
-    [22, 0, 16],
-    [-22, 0, 2],
-    [18, 0, -14],
-  ],
-}
 
 const ENEMY_WAVE_COMPOSITIONS: EnemyWaveComposition[] = [
   {
@@ -35,13 +16,8 @@ const ENEMY_WAVE_COMPOSITIONS: EnemyWaveComposition[] = [
   },
   {
     fast: 2,
-    standard: 2,
+    standard: 3,
     tank: 0,
-  },
-  {
-    fast: 2,
-    standard: 2,
-    tank: 1,
   },
   {
     fast: 3,
@@ -49,9 +25,14 @@ const ENEMY_WAVE_COMPOSITIONS: EnemyWaveComposition[] = [
     tank: 1,
   },
   {
-    fast: 4,
-    standard: 3,
+    fast: 3,
+    standard: 4,
     tank: 1,
+  },
+  {
+    fast: 4,
+    standard: 4,
+    tank: 2,
   },
 ]
 
@@ -69,8 +50,8 @@ function getWaveComposition(waveNumber: number): EnemyWaveComposition {
 
   return {
     fast: lastComposition.fast + extraWaveCount,
-    standard: lastComposition.standard + Math.ceil(extraWaveCount / 2),
-    tank: lastComposition.tank + Math.floor((extraWaveCount + 1) / 3),
+    standard: lastComposition.standard + extraWaveCount,
+    tank: lastComposition.tank + Math.floor((extraWaveCount + 1) / 2),
   }
 }
 
@@ -79,7 +60,7 @@ function createEnemySpawnsForKind(
   count: number,
   waveNumber: number,
 ): EnemySpawnDefinition[] {
-  const spawnAnchors = ENEMY_SPAWN_ANCHORS[enemyType]
+  const spawnAnchors = GREYBOX_ARENA_ENEMY_SPAWN_ANCHORS[enemyType]
 
   return Array.from({ length: count }, (_, index) => ({
     behavior: 'directPursuit',

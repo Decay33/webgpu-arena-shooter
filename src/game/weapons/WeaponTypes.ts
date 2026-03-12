@@ -7,9 +7,18 @@ export type WeaponFireType = 'hitscan' | 'projectile'
 export type WeaponVisualSettings = {
   muzzleFlashColor: string
   muzzleFlashDistance: number
+  muzzleFlashGlowColor: string
+  muzzleFlashLength: number
   muzzleFlashLifetimeMs: number
   muzzleFlashSize: number
+  impactColor: string
+  impactGlowColor: string
+  impactLifetimeMs: number
+  impactRingSize: number
+  impactSize: number
   tracerColor: string
+  tracerGlowColor: string
+  tracerGlowThickness: number
   tracerLifetimeMs: number
   tracerThickness: number
 }
@@ -53,12 +62,19 @@ export type WeaponProjectileSpawn = {
   damage: number
   direction: [number, number, number]
   explosionColor: string
+  explosionGlowColor: string
   explosionLifetimeMs: number
+  explosionRingColor: string
+  explosionRingSize: number
   explosionSize: number
+  glowColor: string
   maxDistance: number
   position: [number, number, number]
   size: number
   speed: number
+  trailColor: string
+  trailLength: number
+  trailSize: number
 }
 
 export type WeaponShotResult = {

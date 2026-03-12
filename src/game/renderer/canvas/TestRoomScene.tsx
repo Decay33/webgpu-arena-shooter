@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import { type RapierRigidBody, Physics } from '@react-three/rapier'
 
 import { PLAYER_WORLD_GRAVITY } from '../../config/playerMovement.ts'
+import { RunLifecycle } from '../../core/RunLifecycle.tsx'
 import { EnemySpawner } from '../../enemies/EnemySpawner.tsx'
 import { EnemyWaveSystem } from '../../enemies/EnemyWaveSystem.tsx'
 import { AmmoPickupSpawner } from '../../pickups/ammo/AmmoPickupSpawner.tsx'
@@ -18,28 +19,40 @@ export function TestRoomScene() {
 
   return (
     <>
-      <color attach="background" args={['#c9d2de']} />
+      <color attach="background" args={['#9fb5c9']} />
 
-      <ambientLight intensity={0.9} />
+      <ambientLight color="#eef4fb" intensity={0.62} />
+      <hemisphereLight
+        args={['#f7fbff', '#243341', 0.82]}
+        groundColor="#293847"
+        intensity={0.7}
+      />
 
       <directionalLight
         castShadow
-        intensity={2.3}
-        position={[20, 28, 14]}
-        shadow-camera-bottom={-28}
-        shadow-camera-far={80}
-        shadow-camera-left={-32}
-        shadow-camera-right={32}
-        shadow-camera-top={28}
-        shadow-normalBias={0.02}
+        color="#fff2de"
+        intensity={2.55}
+        position={[24, 30, 18]}
+        shadow-camera-bottom={-30}
+        shadow-camera-far={86}
+        shadow-camera-left={-34}
+        shadow-camera-right={34}
+        shadow-camera-top={30}
+        shadow-normalBias={0.024}
         shadow-mapSize-height={2048}
         shadow-mapSize-width={2048}
+      />
+      <directionalLight
+        color="#8bbcff"
+        intensity={0.78}
+        position={[-22, 18, -20]}
       />
 
       <Physics colliders={false} gravity={PLAYER_WORLD_GRAVITY}>
         <TestRoomMap />
         <PlayerController bodyRef={playerBodyRef} />
         <PlayerLifecycle bodyRef={playerBodyRef} />
+        <RunLifecycle bodyRef={playerBodyRef} />
         <HealthPickupSpawner playerBodyRef={playerBodyRef} />
         <AmmoPickupSpawner playerBodyRef={playerBodyRef} />
         <WeaponPickupSpawner playerBodyRef={playerBodyRef} />

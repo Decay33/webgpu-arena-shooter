@@ -19,6 +19,7 @@ type HealthPickupStore = {
   collectPickup: (pickupId: HealthPickupId) => void
   pickups: HealthPickupState[]
   refreshRespawns: (nowMs: number) => void
+  resetPickups: () => void
 }
 
 function createInitialPickupState(
@@ -94,4 +95,12 @@ export const useHealthPickupStore = create<HealthPickupStore>((set) => ({
         pickups: nextPickups,
       }
     }),
+  resetPickups: () =>
+    set({
+      pickups: HEALTH_PICKUP_SPAWNS.map(createInitialPickupState),
+    }),
 }))
+
+export function resetHealthPickups() {
+  useHealthPickupStore.getState().resetPickups()
+}

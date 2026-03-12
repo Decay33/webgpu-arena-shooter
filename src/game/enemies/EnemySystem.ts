@@ -16,9 +16,11 @@ import type {
 } from './EnemyTypes.ts'
 
 type EnemyStore = {
+  clearEnemies: () => void
   currentWave: number
   damageEnemy: (enemyId: EnemyId, damageEvent: DamageEvent) => void
   enemies: EnemyState[]
+  resetEnemyRun: () => void
   updateWaveProgress: (nowMs: number) => void
   waveIntermissionDeadlineMs: number | null
   waveState: EnemyWaveState
@@ -45,7 +47,24 @@ function createWaveEnemyStates(waveNumber: number): EnemyState[] {
   return createWaveEnemySpawnDefinitions(waveNumber).map(createEnemyState)
 }
 
+function clearEnemyPositionSnapshots() {
+  enemyPositionSnapshots.clear()
+}
+
 const useEnemyStore = create<EnemyStore>((set) => ({
+  clearEnemies: () =>
+    set((state) => {
+      if (state.enemies.length === 0 && state.waveIntermissionDeadlineMs === null) {
+        return state
+      }
+
+      clearEnemyPositionSnapshots()
+
+      return {
+        enemies: [],
+        waveIntermissionDeadlineMs: null,
+      }
+    }),
   currentWave: 1,
   damageEnemy: (enemyId, damageEvent) =>
     set((state) => {
@@ -89,6 +108,17 @@ const useEnemyStore = create<EnemyStore>((set) => ({
       }
     }),
   enemies: createWaveEnemyStates(1),
+  resetEnemyRun: () =>
+    set(() => {
+      clearEnemyPositionSnapshots()
+
+      return {
+        currentWave: 1,
+        enemies: createWaveEnemyStates(1),
+        waveIntermissionDeadlineMs: null,
+        waveState: 'active',
+      }
+    }),
   updateWaveProgress: (nowMs) =>
     set((state) => {
       if (state.waveState === 'active') {
@@ -149,6 +179,14 @@ export function setEnemyRuntimePosition(
 
 export function updateEnemyWaveProgress(nowMs: number) {
   useEnemyStore.getState().updateWaveProgress(nowMs)
+}
+
+export function clearEnemies() {
+  useEnemyStore.getState().clearEnemies()
+}
+
+export function resetEnemyRun() {
+  useEnemyStore.getState().resetEnemyRun()
 }
 
 export function applyDamageToEnemiesInRadius(

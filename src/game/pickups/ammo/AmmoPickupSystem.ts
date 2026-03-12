@@ -17,6 +17,7 @@ type AmmoPickupStore = {
   collectPickup: (pickupId: AmmoPickupId) => void
   pickups: AmmoPickupState[]
   refreshRespawns: (nowMs: number) => void
+  resetPickups: () => void
 }
 
 function createInitialPickupState(
@@ -90,4 +91,12 @@ export const useAmmoPickupStore = create<AmmoPickupStore>((set) => ({
         pickups: nextPickups,
       }
     }),
+  resetPickups: () =>
+    set({
+      pickups: AMMO_PICKUP_SPAWNS.map(createInitialPickupState),
+    }),
 }))
+
+export function resetAmmoPickups() {
+  useAmmoPickupStore.getState().resetPickups()
+}

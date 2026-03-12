@@ -1,4 +1,5 @@
 import type { WeaponId } from '../../weapons/WeaponTypes.ts'
+import { GREYBOX_ARENA_AMMO_PICKUP_POINTS } from '../../world/map/greyboxArenaLayout.ts'
 
 export type AmmoPickupDefinition = {
   color: string
@@ -22,28 +23,28 @@ export const AMMO_PICKUP_SPAWNS: AmmoPickupDefinition[] = [
   {
     color: '#5dade2',
     id: 'ammo-rifle-01',
-    position: [-16, 0, 16],
+    position: GREYBOX_ARENA_AMMO_PICKUP_POINTS.rifle[0],
     restoreAmount: 45,
     weaponId: 'rifle',
   },
   {
     color: '#5dade2',
     id: 'ammo-rifle-02',
-    position: [6, 0, -18],
+    position: GREYBOX_ARENA_AMMO_PICKUP_POINTS.rifle[1],
     restoreAmount: 45,
     weaponId: 'rifle',
   },
   {
     color: '#f4a261',
     id: 'ammo-shotgun-01',
-    position: [20, 2, 6],
+    position: GREYBOX_ARENA_AMMO_PICKUP_POINTS.shotgun[0],
     restoreAmount: 8,
     weaponId: 'shotgun',
   },
   {
     color: '#e76f51',
     id: 'ammo-rocket-01',
-    position: [-20, 0, 2],
+    position: GREYBOX_ARENA_AMMO_PICKUP_POINTS.rocketLauncher[0],
     restoreAmount: 3,
     weaponId: 'rocketLauncher',
   },

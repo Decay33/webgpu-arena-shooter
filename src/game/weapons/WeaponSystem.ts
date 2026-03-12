@@ -6,6 +6,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { getCameraRay, raycastWorld } from '../combat/RaycastSystem.ts'
 import { applyDamageToEnemyByCollider } from '../enemies/EnemyRegistry.ts'
 import { applyDamageToEnemiesInRadius } from '../enemies/EnemySystem.ts'
+import { useRunStore } from '../core/state/runStore.ts'
 import { usePlayerHealthStore } from '../player/health/playerHealthStore.ts'
 import { useRendererStore } from '../renderer/state/rendererStore.ts'
 import { createWeaponById } from './WeaponRegistry.ts'
@@ -21,13 +22,25 @@ import type {
 } from './WeaponTypes.ts'
 
 export type HitMarker = {
+  color: string
+  createdAt: number
+  glowColor: string
   id: number
+  lifetimeMs: number
+  normal: [number, number, number]
   position: [number, number, number]
+  ringSize: number
+  size: number
 }
 
 export type MuzzleFlash = {
   color: string
+  createdAt: number
+  direction: [number, number, number]
+  glowColor: string
   id: number
+  length: number
+  lifetimeMs: number
   position: [number, number, number]
   size: number
 }
@@ -35,6 +48,8 @@ export type MuzzleFlash = {
 export type Tracer = {
   color: string
   end: [number, number, number]
+  glowColor: string
+  glowThickness: number
   id: number
   start: [number, number, number]
   thickness: number
@@ -47,8 +62,13 @@ export type WeaponProjectile = WeaponProjectileSpawn & {
 
 export type Explosion = {
   color: string
+  createdAt: number
+  glowColor: string
   id: number
+  lifetimeMs: number
   position: [number, number, number]
+  ringColor: string
+  ringSize: number
   size: number
 }
 
@@ -61,6 +81,7 @@ export type WeaponEffectsState = {
   hitMarkers: HitMarker[]
   muzzleFlashes: MuzzleFlash[]
   projectiles: WeaponProjectile[]
+  shotSequence: number
   tracers: Tracer[]
 }
 
@@ -68,7 +89,6 @@ type FiredShot = WeaponShotResult & {
   ray: WeaponRay
 }
 
-const HIT_MARKER_LIFETIME_MS = 180
 const HIT_MARKER_NORMAL_OFFSET = 0.08
 const ROCKET_EXPLOSION_SOURCE = 'rocketLauncher:explosion'
 
@@ -122,16 +142,19 @@ export function useWeaponSystem({
   const currentWeaponId = usePlayerWeaponStore((state) => state.currentWeaponId)
   const playerAlive = usePlayerHealthStore((state) => state.alive)
   const pointerLocked = useRendererStore((state) => state.pointerLocked)
+  const runState = useRunStore((state) => state.runState)
   const { rapier, world } = useRapier()
   const [explosions, setExplosions] = useState<Explosion[]>([])
   const [hitMarkers, setHitMarkers] = useState<HitMarker[]>([])
   const [muzzleFlashes, setMuzzleFlashes] = useState<MuzzleFlash[]>([])
   const [projectiles, setProjectiles] = useState<WeaponProjectile[]>([])
+  const [shotSequence, setShotSequence] = useState(0)
   const [tracers, setTracers] = useState<Tracer[]>([])
   const weaponInstancesRef = useRef<Partial<Record<WeaponId, Weapon>>>({})
   const projectilesRef = useRef<WeaponProjectile[]>([])
   const effectIdRef = useRef(0)
   const effectTimeoutsRef = useRef<number[]>([])
+  const effectsClearedRef = useRef(false)
 
   useEffect(() => {
     projectilesRef.current = projectiles
@@ -147,13 +170,32 @@ export function useWeaponSystem({
 
   useEffect(() => {
     const spawnHitMarker = (
+      shotResult: FiredShot,
       point: [number, number, number],
       normal: [number, number, number],
     ) => {
+      if (shotResult.definition.visuals.impactLifetimeMs <= 0) {
+        return
+      }
+
       const id = effectIdRef.current++
       const position = offsetHitMarkerPosition(point, normal)
+      const createdAt = performance.now()
 
-      setHitMarkers((currentMarkers) => [...currentMarkers, { id, position }])
+      setHitMarkers((currentMarkers) => [
+        ...currentMarkers,
+        {
+          color: shotResult.definition.visuals.impactColor,
+          createdAt,
+          glowColor: shotResult.definition.visuals.impactGlowColor,
+          id,
+          lifetimeMs: shotResult.definition.visuals.impactLifetimeMs,
+          normal,
+          position,
+          ringSize: shotResult.definition.visuals.impactRingSize,
+          size: shotResult.definition.visuals.impactSize,
+        },
+      ])
 
       const timeoutId = window.setTimeout(() => {
         setHitMarkers((currentMarkers) =>
@@ -162,7 +204,7 @@ export function useWeaponSystem({
         effectTimeoutsRef.current = effectTimeoutsRef.current.filter(
           (trackedTimeoutId) => trackedTimeoutId !== timeoutId,
         )
-      }, HIT_MARKER_LIFETIME_MS)
+      }, shotResult.definition.visuals.impactLifetimeMs)
 
       effectTimeoutsRef.current.push(timeoutId)
     }
@@ -174,12 +216,18 @@ export function useWeaponSystem({
         shotResult.ray.direction,
         shotResult.definition.visuals.muzzleFlashDistance,
       )
+      const createdAt = performance.now()
 
       setMuzzleFlashes((currentFlashes) => [
         ...currentFlashes,
         {
           color: shotResult.definition.visuals.muzzleFlashColor,
+          createdAt,
+          direction: shotResult.ray.direction,
+          glowColor: shotResult.definition.visuals.muzzleFlashGlowColor,
           id,
+          length: shotResult.definition.visuals.muzzleFlashLength,
+          lifetimeMs: shotResult.definition.visuals.muzzleFlashLifetimeMs,
           position,
           size: shotResult.definition.visuals.muzzleFlashSize,
         },
@@ -237,6 +285,8 @@ export function useWeaponSystem({
         {
           color: shotResult.definition.visuals.tracerColor,
           end,
+          glowColor: shotResult.definition.visuals.tracerGlowColor,
+          glowThickness: shotResult.definition.visuals.tracerGlowThickness,
           id,
           start,
           thickness: shotResult.definition.visuals.tracerThickness,
@@ -256,7 +306,12 @@ export function useWeaponSystem({
     }
 
     const handleMouseDown = (event: MouseEvent) => {
-      if (event.button !== 0 || !pointerLocked || !playerAlive) {
+      if (
+        event.button !== 0 ||
+        !pointerLocked ||
+        !playerAlive ||
+        runState !== 'running'
+      ) {
         return
       }
 
@@ -305,6 +360,7 @@ export function useWeaponSystem({
         ray: shotRay,
       }
 
+      setShotSequence((currentShotSequence) => currentShotSequence + 1)
       spawnMuzzleFlash(firedShot)
       shotResult.projectiles.forEach((projectile) => {
         spawnProjectile(projectile)
@@ -328,7 +384,7 @@ export function useWeaponSystem({
           })
         }
 
-        spawnHitMarker(trace.hit.point, trace.hit.normal)
+        spawnHitMarker(firedShot, trace.hit.point, trace.hit.normal)
       })
 
       if (hitPoints.length > 0) {
@@ -341,9 +397,38 @@ export function useWeaponSystem({
     return () => {
       window.removeEventListener('mousedown', handleMouseDown)
     }
-  }, [bodyRef, camera, currentWeaponId, playerAlive, pointerLocked, rapier, world])
+  }, [
+    bodyRef,
+    camera,
+    currentWeaponId,
+    playerAlive,
+    pointerLocked,
+    rapier,
+    runState,
+    world,
+  ])
 
   useFrame((_, delta) => {
+    if (useRunStore.getState().runState !== 'running') {
+      if (effectsClearedRef.current) {
+        return
+      }
+
+      effectTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
+      effectTimeoutsRef.current = []
+      projectilesRef.current = []
+      setExplosions([])
+      setHitMarkers([])
+      setMuzzleFlashes([])
+      setProjectiles([])
+      setShotSequence(0)
+      setTracers([])
+      effectsClearedRef.current = true
+      return
+    }
+
+    effectsClearedRef.current = false
+
     const activeProjectiles = projectilesRef.current
 
     if (activeProjectiles.length === 0) {
@@ -355,13 +440,19 @@ export function useWeaponSystem({
       position: [number, number, number],
     ) => {
       const id = effectIdRef.current++
+      const createdAt = performance.now()
 
       setExplosions((currentExplosions) => [
         ...currentExplosions,
         {
           color: projectile.explosionColor,
+          createdAt,
+          glowColor: projectile.explosionGlowColor,
           id,
+          lifetimeMs: projectile.explosionLifetimeMs,
           position,
+          ringColor: projectile.explosionRingColor,
+          ringSize: projectile.explosionRingSize,
           size: projectile.explosionSize,
         },
       ])
@@ -448,6 +539,7 @@ export function useWeaponSystem({
     hitMarkers,
     muzzleFlashes,
     projectiles,
+    shotSequence,
     tracers,
   }
 }

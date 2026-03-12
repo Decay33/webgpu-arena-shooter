@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 
+import { useRunStore } from '../core/state/runStore.ts'
 import { usePlayerWeaponStore } from './playerWeaponStore.ts'
 import type { WeaponId } from './WeaponTypes.ts'
 
@@ -14,6 +15,10 @@ export function useWeaponSwitchInput() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (useRunStore.getState().runState !== 'running') {
+        return
+      }
+
       const nextWeaponId = WEAPON_KEY_BINDINGS[event.code]
 
       if (!nextWeaponId) {

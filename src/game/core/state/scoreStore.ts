@@ -6,6 +6,7 @@ type ScoreStore = {
   addScore: (scoreAmount: number, source: string) => void
   bestScore: number
   currentScore: number
+  resetScore: () => void
 }
 
 function readBestScore() {
@@ -64,8 +65,22 @@ export const useScoreStore = create<ScoreStore>((set) => ({
     }),
   bestScore: INITIAL_BEST_SCORE,
   currentScore: 0,
+  resetScore: () =>
+    set((state) => {
+      if (state.currentScore === 0) {
+        return state
+      }
+
+      return {
+        currentScore: 0,
+      }
+    }),
 }))
 
 export function addScore(scoreAmount: number, source: string) {
   useScoreStore.getState().addScore(scoreAmount, source)
+}
+
+export function resetScore() {
+  useScoreStore.getState().resetScore()
 }

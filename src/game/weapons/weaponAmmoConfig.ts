@@ -10,20 +10,20 @@ export type WeaponAmmoConfig = {
 export const WEAPON_AMMO_CONFIG: Record<WeaponId, WeaponAmmoConfig> = {
   rifle: {
     ammoPerShot: 1,
-    maxAmmo: 240,
-    startingAmmo: 180,
+    maxAmmo: 260,
+    startingAmmo: 200,
     unlockAmmo: 0,
   },
   rocketLauncher: {
     ammoPerShot: 1,
-    maxAmmo: 12,
+    maxAmmo: 14,
     startingAmmo: 0,
-    unlockAmmo: 6,
+    unlockAmmo: 5,
   },
   shotgun: {
     ammoPerShot: 1,
-    maxAmmo: 32,
+    maxAmmo: 36,
     startingAmmo: 0,
-    unlockAmmo: 12,
+    unlockAmmo: 14,
   },
 }

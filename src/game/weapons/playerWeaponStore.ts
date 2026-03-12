@@ -20,6 +20,7 @@ type PlayerWeaponState = {
   consumeAmmo: (weaponId: WeaponId, amount: number) => boolean
   currentWeaponId: WeaponId
   grantAmmo: (weaponId: WeaponId, amount: number) => number
+  resetWeapons: () => void
   switchWeapon: (weaponId: WeaponId) => void
   unlockWeapon: (weaponId: WeaponId) => void
   unlockedWeapons: WeaponUnlockState
@@ -120,6 +121,12 @@ export const usePlayerWeaponStore = create<PlayerWeaponState>((set) => ({
 
     return grantedAmmo
   },
+  resetWeapons: () =>
+    set({
+      ammoByWeapon: createInitialAmmoState(),
+      currentWeaponId: WEAPON_SLOT_ORDER[0],
+      unlockedWeapons: createInitialUnlockState(),
+    }),
   switchWeapon: (weaponId) =>
     set((state) => {
       if (!state.unlockedWeapons[weaponId] || state.currentWeaponId === weaponId) {
@@ -159,3 +166,7 @@ export const usePlayerWeaponStore = create<PlayerWeaponState>((set) => ({
     }),
   unlockedWeapons: INITIAL_UNLOCK_STATE,
 }))
+
+export function resetWeapons() {
+  usePlayerWeaponStore.getState().resetWeapons()
+}

@@ -2,6 +2,7 @@ import { useScoreStore } from '../../core/state/scoreStore.ts'
 import { useEnemySystem } from '../../enemies/EnemySystem.ts'
 import { usePlayerHealthStore } from '../../player/health/playerHealthStore.ts'
 import { useRendererStore } from '../../renderer/state/rendererStore.ts'
+import { useUiStore } from '../state/uiStore.ts'
 import {
   getWeaponDefinition,
   WEAPON_SLOT_ORDER,
@@ -9,6 +10,7 @@ import {
 import { usePlayerWeaponStore } from '../../weapons/playerWeaponStore.ts'
 
 export function DebugOverlay() {
+  const debugOverlayVisible = useUiStore((state) => state.debugOverlayVisible)
   const rendererMode = useRendererStore((state) => state.rendererMode)
   const fpsEstimate = useRendererStore((state) => state.fpsEstimate)
   const initializationState = useRendererStore(
@@ -46,6 +48,10 @@ export function DebugOverlay() {
       return `${getWeaponDefinition(weaponId).displayName}:${ammoState.currentAmmo}/${ammoState.maxAmmo}`
     })
     .join(', ')
+
+  if (!debugOverlayVisible) {
+    return null
+  }
 
   return (
     <aside className="debug-overlay">
@@ -139,6 +145,7 @@ export function DebugOverlay() {
       {!pointerLocked ? (
         <p className="debug-overlay__hint">Click to capture mouse</p>
       ) : null}
+      <p className="debug-overlay__hint">F3 toggles debug overlay</p>
     </aside>
   )
 }

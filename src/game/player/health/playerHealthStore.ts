@@ -6,6 +6,7 @@ import type { DamageEvent, HealthState } from '../../health/HealthTypes.ts'
 
 type PlayerHealthStore = HealthState & {
   applyDamage: (damageEvent: DamageEvent) => void
+  resetPlayerState: () => void
   restoreHealth: (healthAmount: number, source: string) => number
   respawnDeadlineMs: number | null
   respawnDelaySeconds: number
@@ -58,11 +59,11 @@ export const usePlayerHealthStore = create<PlayerHealthStore>((set) => ({
       return {
         alive: false,
         currentHealth: 0,
-        respawnDeadlineMs:
-          performance.now() + state.respawnDelaySeconds * 1000,
-        respawnRemainingSeconds: state.respawnDelaySeconds,
+        respawnDeadlineMs: null,
+        respawnRemainingSeconds: null,
       }
     }),
+  resetPlayerState: () => set(createInitialPlayerHealthState()),
   restoreHealth: (healthAmount, source) => {
     let restoredHealth = 0
 
@@ -121,4 +122,8 @@ export function getPlayerHealthSnapshot() {
 
 export function restorePlayerHealth(healthAmount: number, source: string) {
   return usePlayerHealthStore.getState().restoreHealth(healthAmount, source)
+}
+
+export function resetPlayerState() {
+  usePlayerHealthStore.getState().resetPlayerState()
 }

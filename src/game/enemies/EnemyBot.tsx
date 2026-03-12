@@ -41,6 +41,10 @@ type EnemyBotProps = {
 const DOWN_VECTOR = { x: 0, y: -1, z: 0 }
 const PURSUIT_VECTOR = new Vector3()
 
+function getVelocityStep(rate: number, delta: number) {
+  return Math.min(1, rate * delta)
+}
+
 function toPositionTuple(position: { x: number; y: number; z: number }) {
   return [position.x, position.y, position.z] as [number, number, number]
 }
@@ -161,17 +165,24 @@ export function EnemyBot({ enemy, onDamage, playerBodyRef }: EnemyBotProps) {
     const targetVelocityZ = shouldChase
       ? PURSUIT_VECTOR.z * enemyTypeDefinition.moveSpeed
       : 0
-    const controlStrength = isGrounded ? 1 : ENEMY_SHARED_MOVEMENT_CONFIG.airControl
+    const accelerationRate = isGrounded
+      ? shouldChase
+        ? ENEMY_SHARED_MOVEMENT_CONFIG.groundAcceleration
+        : ENEMY_SHARED_MOVEMENT_CONFIG.groundDeceleration
+      : shouldChase
+        ? ENEMY_SHARED_MOVEMENT_CONFIG.airAcceleration
+        : ENEMY_SHARED_MOVEMENT_CONFIG.airDeceleration
+    const velocityStep = getVelocityStep(accelerationRate, delta)
 
     body.setLinvel(
       {
         x:
           currentVelocity.x +
-          (targetVelocityX - currentVelocity.x) * controlStrength,
+          (targetVelocityX - currentVelocity.x) * velocityStep,
         y: currentVelocity.y,
         z:
           currentVelocity.z +
-          (targetVelocityZ - currentVelocity.z) * controlStrength,
+          (targetVelocityZ - currentVelocity.z) * velocityStep,
       },
       true,
     )

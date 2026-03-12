@@ -1,139 +1,135 @@
-import { CuboidCollider, RigidBody } from '@react-three/rapier'
+import { useEffect, useMemo } from 'react'
+
+import { CuboidCollider, RigidBody, TrimeshCollider } from '@react-three/rapier'
+import { ExtrudeGeometry, Float32BufferAttribute, Shape } from 'three'
 
 import { WORLD_COLLISION_GROUPS } from '../../../shared/constants/collisionGroups.ts'
+import {
+  GREYBOX_ARENA_DECORATIVE_BLOCKS,
+  GREYBOX_ARENA_FLOOR_BLOCK,
+  GREYBOX_ARENA_STRUCTURAL_BLOCKS,
+  type GreyboxBlockDefinition,
+  type RampDirection,
+} from './greyboxArenaLayout.ts'
 
-type GreyboxBlockDefinition = {
-  key: string
-  position: [number, number, number]
-  size: [number, number, number]
-  color: string
-  rotation?: [number, number, number]
+type RampGeometryData = {
+  colliderIndices: Uint32Array
+  colliderVertices: Float32Array
+  geometry: ExtrudeGeometry
 }
 
-const ARENA_WIDTH = 56
-const ARENA_DEPTH = 44
-const FLOOR_THICKNESS = 0.2
-const FLOOR_POSITION_Y = -FLOOR_THICKNESS / 2
-const WALL_HEIGHT = 6
-const WALL_THICKNESS = 1
-const WALL_HALF_WIDTH = ARENA_WIDTH / 2
-const WALL_HALF_DEPTH = ARENA_DEPTH / 2
+function createRampGeometry(
+  size: [number, number, number],
+  direction: RampDirection,
+): RampGeometryData {
+  const [width, height, depth] = size
+  const halfWidth = width / 2
+  const halfHeight = height / 2
+  const halfDepth = depth / 2
 
-const COLORS = {
-  floor: '#646f7c',
-  wall: '#dfe5ec',
-  cover: '#9ba8b8',
-  platform: '#b7c1cc',
-  ramp: '#8c99a9',
+  const shape = new Shape()
+  shape.moveTo(0, 0)
+  shape.lineTo(width, 0)
+  shape.lineTo(width, height)
+  shape.closePath()
+
+  const geometry = new ExtrudeGeometry(shape, {
+    bevelEnabled: false,
+    depth,
+    steps: 1,
+  })
+
+  geometry.translate(-halfWidth, -halfHeight, -halfDepth)
+
+  if (direction === 'negativeX') {
+    geometry.rotateY(Math.PI)
+  } else if (direction === 'positiveZ') {
+    geometry.rotateY(-Math.PI / 2)
+  } else if (direction === 'negativeZ') {
+    geometry.rotateY(Math.PI / 2)
+  }
+
+  geometry.computeVertexNormals()
+
+  const positionAttribute = geometry.getAttribute('position')
+  const colliderVertices = Float32Array.from(
+    (positionAttribute as Float32BufferAttribute).array,
+  )
+  const index = geometry.getIndex()
+  const colliderIndices = index
+    ? Uint32Array.from(index.array)
+    : Uint32Array.from(
+        Array.from({ length: positionAttribute.count }, (_, vertexIndex) => vertexIndex),
+      )
+
+  return {
+    colliderIndices,
+    colliderVertices,
+    geometry,
+  }
 }
 
-const FLOOR: GreyboxBlockDefinition = {
-  key: 'floor',
-  position: [0, FLOOR_POSITION_Y, 0],
-  size: [ARENA_WIDTH, FLOOR_THICKNESS, ARENA_DEPTH],
-  color: COLORS.floor,
-}
+function RampBlock({
+  block,
+}: {
+  block: GreyboxBlockDefinition & {
+    rampDirection: RampDirection
+    shape: 'ramp'
+  }
+}) {
+  const {
+    castShadow = true,
+    collidable = true,
+    color,
+    emissiveColor = '#000000',
+    emissiveIntensity = 0,
+    key,
+    metalness = 0,
+    opacity = 1,
+    position,
+    rampDirection,
+    receiveShadow = true,
+    roughness = 1,
+    size,
+    transparent = false,
+  } = block
 
-const BOUNDARY_WALLS: GreyboxBlockDefinition[] = [
-  {
-    key: 'north-wall',
-    position: [0, WALL_HEIGHT / 2, -WALL_HALF_DEPTH],
-    size: [ARENA_WIDTH, WALL_HEIGHT, WALL_THICKNESS],
-    color: COLORS.wall,
-  },
-  {
-    key: 'south-wall',
-    position: [0, WALL_HEIGHT / 2, WALL_HALF_DEPTH],
-    size: [ARENA_WIDTH, WALL_HEIGHT, WALL_THICKNESS],
-    color: COLORS.wall,
-  },
-  {
-    key: 'west-wall',
-    position: [-WALL_HALF_WIDTH, WALL_HEIGHT / 2, 0],
-    size: [WALL_THICKNESS, WALL_HEIGHT, ARENA_DEPTH],
-    color: COLORS.wall,
-  },
-  {
-    key: 'east-wall',
-    position: [WALL_HALF_WIDTH, WALL_HEIGHT / 2, 0],
-    size: [WALL_THICKNESS, WALL_HEIGHT, ARENA_DEPTH],
-    color: COLORS.wall,
-  },
-]
+  const rampGeometry = useMemo(
+    () => createRampGeometry(size, rampDirection),
+    [rampDirection, size],
+  )
 
-const COVER_BLOCKS: GreyboxBlockDefinition[] = [
-  {
-    key: 'central-pillar',
-    position: [0, 1.8, 0],
-    size: [4, 3.6, 4],
-    color: COLORS.cover,
-  },
-  {
-    key: 'cover-west-mid',
-    position: [-8, 1.25, -4],
-    size: [5, 2.5, 3],
-    color: COLORS.cover,
-  },
-  {
-    key: 'cover-east-mid',
-    position: [8, 1.25, 8],
-    size: [5, 2.5, 3],
-    color: COLORS.cover,
-  },
-  {
-    key: 'cover-west-far',
-    position: [-20, 1.25, -10],
-    size: [6, 2.5, 3],
-    color: COLORS.cover,
-  },
-  {
-    key: 'cover-south-center',
-    position: [3, 1.25, 14],
-    size: [6, 2.5, 3],
-    color: COLORS.cover,
-  },
-  {
-    key: 'cover-north-east',
-    position: [17, 1.25, -11],
-    size: [4, 2.5, 4],
-    color: COLORS.cover,
-  },
-]
+  useEffect(() => {
+    return () => {
+      rampGeometry.geometry.dispose()
+    }
+  }, [rampGeometry.geometry])
 
-const DIVIDER_WALLS: GreyboxBlockDefinition[] = [
-  {
-    key: 'divider-west-lane',
-    position: [-13, 1.5, 6],
-    size: [1, 3, 20],
-    color: COLORS.wall,
-  },
-  {
-    key: 'divider-north-cross',
-    position: [-6, 1.5, -15],
-    size: [16, 3, 1],
-    color: COLORS.wall,
-  },
-  {
-    key: 'divider-south-east',
-    position: [12, 1.5, 14],
-    size: [14, 3, 1],
-    color: COLORS.wall,
-  },
-]
-
-const RAISED_PLATFORM: GreyboxBlockDefinition = {
-  key: 'raised-platform',
-  position: [18, 1, 0],
-  size: [10, 2, 10],
-  color: COLORS.platform,
-}
-
-const PLATFORM_RAMP: GreyboxBlockDefinition = {
-  key: 'platform-ramp',
-  position: [9, 0.6, 0],
-  size: [8, 0.8, 6],
-  color: COLORS.ramp,
-  rotation: [0, 0, 0.25],
+  return (
+    <RigidBody colliders={false} key={key} position={position} type="fixed">
+      <mesh
+        castShadow={castShadow}
+        geometry={rampGeometry.geometry}
+        receiveShadow={receiveShadow}
+      >
+        <meshStandardMaterial
+          color={color}
+          emissive={emissiveColor}
+          emissiveIntensity={emissiveIntensity}
+          metalness={metalness}
+          opacity={opacity}
+          roughness={roughness}
+          transparent={transparent}
+        />
+      </mesh>
+      {collidable ? (
+        <TrimeshCollider
+          args={[rampGeometry.colliderVertices, rampGeometry.colliderIndices]}
+          collisionGroups={WORLD_COLLISION_GROUPS}
+        />
+      ) : null}
+    </RigidBody>
+  )
 }
 
 function GreyboxBlock({
@@ -141,7 +137,34 @@ function GreyboxBlock({
 }: {
   block: GreyboxBlockDefinition
 }) {
-  const { color, key, position, rotation, size } = block
+  const {
+    castShadow = true,
+    collidable = true,
+    color,
+    emissiveColor = '#000000',
+    emissiveIntensity = 0,
+    key,
+    metalness = 0,
+    opacity = 1,
+    position,
+    receiveShadow = true,
+    rotation,
+    roughness = 1,
+    size,
+    transparent = false,
+  } = block
+
+  if (block.shape === 'ramp' && block.rampDirection) {
+    return (
+      <RampBlock
+        block={{
+          ...block,
+          rampDirection: block.rampDirection,
+          shape: 'ramp',
+        }}
+      />
+    )
+  }
 
   return (
     <RigidBody
@@ -151,32 +174,38 @@ function GreyboxBlock({
       rotation={rotation}
       type="fixed"
     >
-      <mesh castShadow receiveShadow>
+      <mesh castShadow={castShadow} receiveShadow={receiveShadow}>
         <boxGeometry args={size} />
-        <meshStandardMaterial color={color} metalness={0} roughness={1} />
+        <meshStandardMaterial
+          color={color}
+          emissive={emissiveColor}
+          emissiveIntensity={emissiveIntensity}
+          metalness={metalness}
+          opacity={opacity}
+          roughness={roughness}
+          transparent={transparent}
+        />
       </mesh>
-      <CuboidCollider
-        args={[size[0] / 2, size[1] / 2, size[2] / 2]}
-        collisionGroups={WORLD_COLLISION_GROUPS}
-      />
+      {collidable ? (
+        <CuboidCollider
+          args={[size[0] / 2, size[1] / 2, size[2] / 2]}
+          collisionGroups={WORLD_COLLISION_GROUPS}
+        />
+      ) : null}
     </RigidBody>
   )
 }
 
-const STRUCTURAL_BLOCKS: GreyboxBlockDefinition[] = [
-  ...BOUNDARY_WALLS,
-  ...DIVIDER_WALLS,
-  ...COVER_BLOCKS,
-  RAISED_PLATFORM,
-  PLATFORM_RAMP,
-]
-
 export function TestRoomMap() {
   return (
     <>
-      <GreyboxBlock block={FLOOR} />
+      <GreyboxBlock block={GREYBOX_ARENA_FLOOR_BLOCK} />
 
-      {STRUCTURAL_BLOCKS.map((block) => (
+      {GREYBOX_ARENA_STRUCTURAL_BLOCKS.map((block) => (
+        <GreyboxBlock block={block} key={block.key} />
+      ))}
+
+      {GREYBOX_ARENA_DECORATIVE_BLOCKS.map((block) => (
         <GreyboxBlock block={block} key={block.key} />
       ))}
     </>

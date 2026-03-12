@@ -1,4 +1,5 @@
 import type { WeaponId } from '../../weapons/WeaponTypes.ts'
+import { GREYBOX_ARENA_WEAPON_PICKUP_POINTS } from '../../world/map/greyboxArenaLayout.ts'
 
 export type WeaponPickupWeaponId = Exclude<WeaponId, 'rifle'>
 
@@ -17,13 +18,13 @@ export const WEAPON_PICKUP_SPAWNS = [
   {
     color: '#f4a261',
     id: 'weapon-shotgun',
-    position: [18, 2, 0] as [number, number, number],
+    position: GREYBOX_ARENA_WEAPON_PICKUP_POINTS.shotgun,
     weaponId: 'shotgun' as WeaponPickupWeaponId,
   },
   {
     color: '#e76f51',
     id: 'weapon-rocket',
-    position: [-22, 0, 16] as [number, number, number],
+    position: GREYBOX_ARENA_WEAPON_PICKUP_POINTS.rocketLauncher,
     weaponId: 'rocketLauncher' as WeaponPickupWeaponId,
   },
 ] as const
