@@ -1,3 +1,5 @@
+import { useScoreStore } from '../../core/state/scoreStore.ts'
+import { useEnemySystem } from '../../enemies/EnemySystem.ts'
 import { usePlayerHealthStore } from '../../player/health/playerHealthStore.ts'
 import { useRendererStore } from '../../renderer/state/rendererStore.ts'
 import {
@@ -23,13 +25,26 @@ export function DebugOverlay() {
   const respawnRemainingSeconds = usePlayerHealthStore(
     (state) => state.respawnRemainingSeconds,
   )
+  const currentScore = useScoreStore((state) => state.currentScore)
+  const bestScore = useScoreStore((state) => state.bestScore)
+  const ammoByWeapon = usePlayerWeaponStore((state) => state.ammoByWeapon)
   const currentWeaponId = usePlayerWeaponStore((state) => state.currentWeaponId)
   const unlockedWeapons = usePlayerWeaponStore((state) => state.unlockedWeapons)
+  const { currentWave, enemiesRemaining, waveState } = useEnemySystem()
   const currentWeaponName = getWeaponDefinition(currentWeaponId).displayName
+  const currentWeaponAmmo = ammoByWeapon[currentWeaponId]
   const unlockedWeaponNames = WEAPON_SLOT_ORDER.filter(
     (weaponId) => unlockedWeapons[weaponId],
   )
     .map((weaponId) => getWeaponDefinition(weaponId).displayName)
+    .join(', ')
+  const unlockedWeaponAmmo = WEAPON_SLOT_ORDER.filter(
+    (weaponId) => unlockedWeapons[weaponId],
+  )
+    .map((weaponId) => {
+      const ammoState = ammoByWeapon[weaponId]
+      return `${getWeaponDefinition(weaponId).displayName}:${ammoState.currentAmmo}/${ammoState.maxAmmo}`
+    })
     .join(', ')
 
   return (
@@ -74,8 +89,38 @@ export function DebugOverlay() {
         <span className="debug-overlay__value">{currentWeaponName}</span>
       </p>
       <p className="debug-overlay__row">
+        <span className="debug-overlay__label">score</span>
+        <span className="debug-overlay__value">{currentScore}</span>
+      </p>
+      <p className="debug-overlay__row">
+        <span className="debug-overlay__label">best</span>
+        <span className="debug-overlay__value">{bestScore}</span>
+      </p>
+      <p className="debug-overlay__row">
+        <span className="debug-overlay__label">wave</span>
+        <span className="debug-overlay__value">{currentWave}</span>
+      </p>
+      <p className="debug-overlay__row">
+        <span className="debug-overlay__label">enemies</span>
+        <span className="debug-overlay__value">{enemiesRemaining}</span>
+      </p>
+      <p className="debug-overlay__row">
+        <span className="debug-overlay__label">wave state</span>
+        <span className="debug-overlay__value">{waveState}</span>
+      </p>
+      <p className="debug-overlay__row">
+        <span className="debug-overlay__label">ammo</span>
+        <span className="debug-overlay__value">
+          {currentWeaponAmmo.currentAmmo}/{currentWeaponAmmo.maxAmmo}
+        </span>
+      </p>
+      <p className="debug-overlay__row">
         <span className="debug-overlay__label">unlocked</span>
         <span className="debug-overlay__value">{unlockedWeaponNames}</span>
+      </p>
+      <p className="debug-overlay__row">
+        <span className="debug-overlay__label">ammo bag</span>
+        <span className="debug-overlay__value">{unlockedWeaponAmmo}</span>
       </p>
       <p className="debug-overlay__row">
         <span className="debug-overlay__label">alive</span>

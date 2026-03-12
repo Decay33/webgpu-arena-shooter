@@ -3,12 +3,12 @@ import type { HealthState } from '../health/HealthTypes.ts'
 
 export type EnemyId = string
 export type EnemyBehavior = 'directPursuit'
-export type EnemyKind = 'bot'
+export type EnemyKind = 'fast' | 'standard' | 'tank'
+export type EnemyWaveState = 'active' | 'intermission'
 
 export type EnemySpawnDefinition = {
   behavior: EnemyBehavior
   id: EnemyId
-  maxHealth: number
   position: [number, number, number]
   type: EnemyKind
 }

@@ -10,6 +10,7 @@ import { usePlayerHealthStore } from '../player/health/playerHealthStore.ts'
 import { useRendererStore } from '../renderer/state/rendererStore.ts'
 import { createWeaponById } from './WeaponRegistry.ts'
 import { usePlayerWeaponStore } from './playerWeaponStore.ts'
+import { WEAPON_AMMO_CONFIG } from './weaponAmmoConfig.ts'
 import type {
   Weapon,
   WeaponId,
@@ -268,6 +269,14 @@ export function useWeaponSystem({
         return
       }
 
+      const { ammoByWeapon, consumeAmmo } = usePlayerWeaponStore.getState()
+      const ammoConfig = WEAPON_AMMO_CONFIG[currentWeaponId]
+      const currentAmmo = ammoByWeapon[currentWeaponId].currentAmmo
+
+      if (currentAmmo < ammoConfig.ammoPerShot) {
+        return
+      }
+
       const shotRay = getCameraRay(camera)
       const shotResult = equippedWeapon.tryFire({
         now: performance.now() / 1000,
@@ -284,6 +293,10 @@ export function useWeaponSystem({
       })
 
       if (!shotResult) {
+        return
+      }
+
+      if (!consumeAmmo(currentWeaponId, ammoConfig.ammoPerShot)) {
         return
       }
 

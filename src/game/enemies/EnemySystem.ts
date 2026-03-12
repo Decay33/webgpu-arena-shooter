@@ -1,58 +1,30 @@
 import { create } from 'zustand'
 
+import { addScore } from '../core/state/scoreStore.ts'
 import { applyDamage, createHealthState } from '../health/DamageSystem.ts'
 import type { DamageEvent } from '../health/HealthTypes.ts'
-import type { EnemyId, EnemySpawnDefinition, EnemyState } from './EnemyTypes.ts'
+import { getEnemyTypeDefinition } from './EnemyDefinitions.ts'
+import {
+  createWaveEnemySpawnDefinitions,
+  ENEMY_WAVE_CONFIG,
+} from './EnemyWaves.ts'
+import type {
+  EnemyId,
+  EnemySpawnDefinition,
+  EnemyState,
+  EnemyWaveState,
+} from './EnemyTypes.ts'
 
 type EnemyStore = {
+  currentWave: number
   damageEnemy: (enemyId: EnemyId, damageEvent: DamageEvent) => void
   enemies: EnemyState[]
+  updateWaveProgress: (nowMs: number) => void
+  waveIntermissionDeadlineMs: number | null
+  waveState: EnemyWaveState
 }
-
-export const ENEMY_MOVEMENT_CONFIG = {
-  moveSpeed: 2.6,
-  stopDistance: 2.2,
-  airControl: 0.16,
-  groundProbeDistance: 0.18,
-  linearDamping: 5,
-  minGroundNormalY: 0.7,
-  snapshotInterval: 0.15,
-}
-
-export const ENEMY_COMBAT_CONFIG = {
-  contactDamage: 12,
-  contactDamageIntervalSeconds: 0.85,
-  contactDamageRadius: 2.35,
-  contactVerticalTolerance: 2.5,
-}
-
-export const ENEMY_HALF_HEIGHT = 1
 
 const enemyPositionSnapshots = new Map<EnemyId, [number, number, number]>()
-
-const ENEMY_SPAWNS: EnemySpawnDefinition[] = [
-  {
-    behavior: 'directPursuit',
-    id: 'bot-01',
-    maxHealth: 100,
-    position: [0, 0, -18],
-    type: 'bot',
-  },
-  {
-    behavior: 'directPursuit',
-    id: 'bot-02',
-    maxHealth: 100,
-    position: [14, 0, 8],
-    type: 'bot',
-  },
-  {
-    behavior: 'directPursuit',
-    id: 'bot-03',
-    maxHealth: 100,
-    position: [-18, 0, 10],
-    type: 'bot',
-  },
-]
 
 function getSnapshotPosition(
   enemyId: EnemyId,
@@ -65,11 +37,16 @@ function createEnemyState(enemySpawn: EnemySpawnDefinition): EnemyState {
   return {
     ...enemySpawn,
     position: getSnapshotPosition(enemySpawn.id, enemySpawn.position),
-    ...createHealthState(enemySpawn.maxHealth),
+    ...createHealthState(getEnemyTypeDefinition(enemySpawn.type).maxHealth),
   }
 }
 
+function createWaveEnemyStates(waveNumber: number): EnemyState[] {
+  return createWaveEnemySpawnDefinitions(waveNumber).map(createEnemyState)
+}
+
 const useEnemyStore = create<EnemyStore>((set) => ({
+  currentWave: 1,
   damageEnemy: (enemyId, damageEvent) =>
     set((state) => {
       const enemyIndex = state.enemies.findIndex((enemy) => enemy.id === enemyId)
@@ -96,6 +73,8 @@ const useEnemyStore = create<EnemyStore>((set) => ({
 
       if (damageResult.died) {
         console.log(`Enemy ${enemy.id} died.`)
+        enemyPositionSnapshots.delete(enemy.id)
+        addScore(getEnemyTypeDefinition(enemy.type).scoreValue, `${enemy.id}:kill`)
       }
 
       const nextEnemies = [...state.enemies]
@@ -109,7 +88,49 @@ const useEnemyStore = create<EnemyStore>((set) => ({
         enemies: nextEnemies,
       }
     }),
-  enemies: ENEMY_SPAWNS.map(createEnemyState),
+  enemies: createWaveEnemyStates(1),
+  updateWaveProgress: (nowMs) =>
+    set((state) => {
+      if (state.waveState === 'active') {
+        const livingEnemies = state.enemies.filter((enemy) => enemy.alive)
+
+        if (livingEnemies.length > 0) {
+          return state
+        }
+
+        console.log(`Wave ${state.currentWave} complete.`)
+        addScore(
+          ENEMY_WAVE_CONFIG.waveCompleteBonus,
+          `wave-${state.currentWave}:complete`,
+        )
+
+        return {
+          enemies: [],
+          waveIntermissionDeadlineMs:
+            nowMs + ENEMY_WAVE_CONFIG.intermissionDelaySeconds * 1000,
+          waveState: 'intermission',
+        }
+      }
+
+      if (
+        state.waveIntermissionDeadlineMs === null ||
+        state.waveIntermissionDeadlineMs > nowMs
+      ) {
+        return state
+      }
+
+      const nextWave = state.currentWave + 1
+      console.log(`Wave ${nextWave} started.`)
+
+      return {
+        currentWave: nextWave,
+        enemies: createWaveEnemyStates(nextWave),
+        waveIntermissionDeadlineMs: null,
+        waveState: 'active',
+      }
+    }),
+  waveIntermissionDeadlineMs: null,
+  waveState: 'active',
 }))
 
 export function getEnemyRuntimePosition(
@@ -126,6 +147,10 @@ export function setEnemyRuntimePosition(
   enemyPositionSnapshots.set(enemyId, position)
 }
 
+export function updateEnemyWaveProgress(nowMs: number) {
+  useEnemyStore.getState().updateWaveProgress(nowMs)
+}
+
 export function applyDamageToEnemiesInRadius(
   center: [number, number, number],
   radius: number,
@@ -140,9 +165,10 @@ export function applyDamageToEnemiesInRadius(
     }
 
     const enemyPosition = getSnapshotPosition(enemy.id, enemy.position)
+    const enemyTypeDefinition = getEnemyTypeDefinition(enemy.type)
     const distanceToExplosion = Math.hypot(
       center[0] - enemyPosition[0],
-      center[1] - (enemyPosition[1] + ENEMY_HALF_HEIGHT),
+      center[1] - (enemyPosition[1] + enemyTypeDefinition.colliderOffsetY),
       center[2] - enemyPosition[2],
     )
 
@@ -158,11 +184,16 @@ export function applyDamageToEnemiesInRadius(
 }
 
 export function useEnemySystem() {
+  const currentWave = useEnemyStore((state) => state.currentWave)
   const damageEnemy = useEnemyStore((state) => state.damageEnemy)
   const enemies = useEnemyStore((state) => state.enemies)
+  const waveState = useEnemyStore((state) => state.waveState)
 
   return {
+    currentWave,
     damageEnemy,
     enemies,
+    enemiesRemaining: enemies.filter((enemy) => enemy.alive).length,
+    waveState,
   }
 }

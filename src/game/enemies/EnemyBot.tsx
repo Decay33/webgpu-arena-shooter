@@ -22,9 +22,11 @@ import {
   unregisterEnemyCollider,
 } from './EnemyRegistry.ts'
 import {
-  ENEMY_COMBAT_CONFIG,
-  ENEMY_HALF_HEIGHT,
-  ENEMY_MOVEMENT_CONFIG,
+  ENEMY_SHARED_COMBAT_CONFIG,
+  ENEMY_SHARED_MOVEMENT_CONFIG,
+  getEnemyTypeDefinition,
+} from './EnemyDefinitions.ts'
+import {
   getEnemyRuntimePosition,
   setEnemyRuntimePosition,
 } from './EnemySystem.ts'
@@ -36,12 +38,6 @@ type EnemyBotProps = {
   playerBodyRef: RefObject<RapierRigidBody | null>
 }
 
-const ENEMY_BODY_RADIUS = 0.45
-const ENEMY_BODY_SEGMENT_HEIGHT = 1.1
-const ENEMY_HEAD_SIZE = 0.5
-const ENEMY_COLLIDER_HALF_HEIGHT = 0.55
-const ENEMY_COLLIDER_RADIUS = 0.45
-const ENEMY_COLLIDER_OFFSET_Y = 1
 const DOWN_VECTOR = { x: 0, y: -1, z: 0 }
 const PURSUIT_VECTOR = new Vector3()
 
@@ -50,6 +46,7 @@ function toPositionTuple(position: { x: number; y: number; z: number }) {
 }
 
 export function EnemyBot({ enemy, onDamage, playerBodyRef }: EnemyBotProps) {
+  const enemyTypeDefinition = getEnemyTypeDefinition(enemy.type)
   const bodyRef = useRef<RapierRigidBody | null>(null)
   const colliderRef = useRef<RapierCollider | null>(null)
   const lastContactDamageAtRef = useRef(Number.NEGATIVE_INFINITY)
@@ -81,12 +78,6 @@ export function EnemyBot({ enemy, onDamage, playerBodyRef }: EnemyBotProps) {
     }
   }, [enemy.id, onDamage])
 
-  useEffect(() => {
-    return () => {
-      setEnemyRuntimePosition(enemy.id, lastPositionRef.current)
-    }
-  }, [enemy.id])
-
   useFrame((_, delta) => {
     const body = bodyRef.current
 
@@ -116,7 +107,9 @@ export function EnemyBot({ enemy, onDamage, playerBodyRef }: EnemyBotProps) {
     lastPositionRef.current = enemyPosition
     const groundHit = world.castRayAndGetNormal(
       new rapier.Ray(enemyTranslation, DOWN_VECTOR),
-      ENEMY_HALF_HEIGHT + ENEMY_MOVEMENT_CONFIG.groundProbeDistance,
+      enemyTypeDefinition.colliderHalfHeight +
+        enemyTypeDefinition.colliderRadius +
+        ENEMY_SHARED_MOVEMENT_CONFIG.groundProbeDistance,
       true,
       undefined,
       undefined,
@@ -125,7 +118,7 @@ export function EnemyBot({ enemy, onDamage, playerBodyRef }: EnemyBotProps) {
     )
     const isGrounded =
       groundHit !== null &&
-      groundHit.normal.y >= ENEMY_MOVEMENT_CONFIG.minGroundNormalY
+      groundHit.normal.y >= ENEMY_SHARED_MOVEMENT_CONFIG.minGroundNormalY
     const playerTranslation = playerBody.translation()
     const verticalDistanceToPlayer = Math.abs(
       playerTranslation.y - enemyTranslation.y,
@@ -146,30 +139,29 @@ export function EnemyBot({ enemy, onDamage, playerBodyRef }: EnemyBotProps) {
       playerTranslation.z - enemyTranslation.z,
     )
     const isWithinContactRange =
-      planarDistanceToPlayer <= ENEMY_COMBAT_CONFIG.contactDamageRadius &&
-      verticalDistanceToPlayer <= ENEMY_COMBAT_CONFIG.contactVerticalTolerance
+      planarDistanceToPlayer <= enemyTypeDefinition.contactDamageRadius &&
+      verticalDistanceToPlayer <= ENEMY_SHARED_COMBAT_CONFIG.contactVerticalTolerance
 
     if (
       isWithinContactRange &&
       nowSeconds - lastContactDamageAtRef.current >=
-        ENEMY_COMBAT_CONFIG.contactDamageIntervalSeconds
+        ENEMY_SHARED_COMBAT_CONFIG.contactDamageIntervalSeconds
     ) {
       damagePlayer({
-        amount: ENEMY_COMBAT_CONFIG.contactDamage,
+        amount: enemyTypeDefinition.contactDamage,
         source: `${enemy.id}:contact`,
       })
       lastContactDamageAtRef.current = nowSeconds
     }
 
-    const shouldChase =
-      planarDistanceToPlayer > ENEMY_MOVEMENT_CONFIG.stopDistance
+    const shouldChase = planarDistanceToPlayer > enemyTypeDefinition.stopDistance
     const targetVelocityX = shouldChase
-      ? PURSUIT_VECTOR.x * ENEMY_MOVEMENT_CONFIG.moveSpeed
+      ? PURSUIT_VECTOR.x * enemyTypeDefinition.moveSpeed
       : 0
     const targetVelocityZ = shouldChase
-      ? PURSUIT_VECTOR.z * ENEMY_MOVEMENT_CONFIG.moveSpeed
+      ? PURSUIT_VECTOR.z * enemyTypeDefinition.moveSpeed
       : 0
-    const controlStrength = isGrounded ? 1 : ENEMY_MOVEMENT_CONFIG.airControl
+    const controlStrength = isGrounded ? 1 : ENEMY_SHARED_MOVEMENT_CONFIG.airControl
 
     body.setLinvel(
       {
@@ -186,7 +178,7 @@ export function EnemyBot({ enemy, onDamage, playerBodyRef }: EnemyBotProps) {
 
     snapshotTimerRef.current += delta
 
-    if (snapshotTimerRef.current < ENEMY_MOVEMENT_CONFIG.snapshotInterval) {
+    if (snapshotTimerRef.current < ENEMY_SHARED_MOVEMENT_CONFIG.snapshotInterval) {
       return
     }
 
@@ -201,28 +193,50 @@ export function EnemyBot({ enemy, onDamage, playerBodyRef }: EnemyBotProps) {
       canSleep={false}
       colliders={false}
       enabledRotations={[false, false, false]}
-      linearDamping={ENEMY_MOVEMENT_CONFIG.linearDamping}
+      linearDamping={ENEMY_SHARED_MOVEMENT_CONFIG.linearDamping}
       position={getEnemyRuntimePosition(enemy.id, enemy.position)}
       type="dynamic"
     >
-      <mesh castShadow position={[0, 1, 0]} receiveShadow>
+      <mesh castShadow position={[0, enemyTypeDefinition.bodyOffsetY, 0]} receiveShadow>
         <capsuleGeometry
-          args={[ENEMY_BODY_RADIUS, ENEMY_BODY_SEGMENT_HEIGHT, 4, 10]}
+          args={[
+            enemyTypeDefinition.bodyRadius,
+            enemyTypeDefinition.bodySegmentHeight,
+            4,
+            10,
+          ]}
         />
-        <meshStandardMaterial color="#7f8a99" metalness={0} roughness={0.9} />
+        <meshStandardMaterial
+          color={enemyTypeDefinition.bodyColor}
+          metalness={0}
+          roughness={0.9}
+        />
       </mesh>
 
-      <mesh castShadow position={[0, 1.85, 0]} receiveShadow>
-        <boxGeometry args={[ENEMY_HEAD_SIZE, ENEMY_HEAD_SIZE, ENEMY_HEAD_SIZE]} />
-        <meshStandardMaterial color="#b4beca" metalness={0} roughness={0.85} />
+      <mesh castShadow position={[0, enemyTypeDefinition.headOffsetY, 0]} receiveShadow>
+        <boxGeometry
+          args={[
+            enemyTypeDefinition.headSize,
+            enemyTypeDefinition.headSize,
+            enemyTypeDefinition.headSize,
+          ]}
+        />
+        <meshStandardMaterial
+          color={enemyTypeDefinition.headColor}
+          metalness={0}
+          roughness={0.85}
+        />
       </mesh>
 
       <CapsuleCollider
         ref={colliderRef}
-        args={[ENEMY_COLLIDER_HALF_HEIGHT, ENEMY_COLLIDER_RADIUS]}
+        args={[
+          enemyTypeDefinition.colliderHalfHeight,
+          enemyTypeDefinition.colliderRadius,
+        ]}
         collisionGroups={ENEMY_COLLISION_GROUPS}
         friction={1}
-        position={[0, ENEMY_COLLIDER_OFFSET_Y, 0]}
+        position={[0, enemyTypeDefinition.colliderOffsetY, 0]}
       />
     </RigidBody>
   )
