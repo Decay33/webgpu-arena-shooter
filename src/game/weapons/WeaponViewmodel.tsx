@@ -1,282 +1,253 @@
-import { useEffect, useRef } from 'react'
+import {
+  memo,
+  useEffect,
+  useRef,
+  type MutableRefObject,
+  type RefObject,
+} from 'react'
 
 import { useFrame, useThree } from '@react-three/fiber'
-import { Group, Euler, MathUtils, Quaternion, Vector3 } from 'three'
+import { Euler, Group, MathUtils, Object3D, Vector3 } from 'three'
 
-import { WEAPON_VIEWMODEL_CONFIG } from '../config/weaponViewmodels.ts'
+import {
+  WEAPON_VIEWMODEL_CONFIG,
+  type WeaponViewmodelAxis,
+  type WeaponViewmodelMaterial,
+  type WeaponViewmodelPart,
+} from '../config/weaponViewmodels.ts'
 import { useRunStore } from '../core/state/runStore.ts'
 import { usePlayerHealthStore } from '../player/health/playerHealthStore.ts'
 import { usePlayerWeaponStore } from './playerWeaponStore.ts'
 
 type WeaponViewmodelProps = {
-  shotSequence: number
+  muzzleWorldPositionRef: MutableRefObject<[number, number, number] | null>
+  shotSequenceRef: MutableRefObject<number>
 }
 
-type WeaponPartProps = {
-  color: string
-  position: [number, number, number]
-  rotation?: [number, number, number]
-  size: [number, number, number]
-}
-
-type WeaponTubeProps = {
-  color: string
-  length: number
-  position: [number, number, number]
-  radius: number
-  rotation?: [number, number, number]
+type ViewmodelPartProps = {
+  material: WeaponViewmodelMaterial
+  part: WeaponViewmodelPart
 }
 
 const VIEWMODEL_OFFSET = new Vector3()
-const RECOIL_POSITION = new Vector3()
-const RECOIL_ROTATION = new Vector3()
 const LOCAL_ROTATION = new Euler(0, 0, 0, 'XYZ')
-const LOCAL_QUATERNION = new Quaternion()
-
-function WeaponPart({
-  color,
-  position,
-  rotation = [0, 0, 0],
-  size,
-}: WeaponPartProps) {
-  return (
-    <mesh frustumCulled={false} position={position} renderOrder={30} rotation={rotation}>
-      <boxGeometry args={size} />
-      <meshStandardMaterial
-        color={color}
-        depthTest={false}
-        depthWrite={false}
-        metalness={0.12}
-        roughness={0.72}
-      />
-    </mesh>
-  )
+const MUZZLE_WORLD_POSITION = new Vector3()
+const ORIENTATION_BY_AXIS: Record<WeaponViewmodelAxis, [number, number, number]> = {
+  x: [0, 0, -Math.PI / 2],
+  y: [0, 0, 0],
+  z: [Math.PI / 2, 0, 0],
 }
 
-function WeaponTube({
-  color,
-  length,
-  position,
-  radius,
-  rotation = [0, 0, 0],
-}: WeaponTubeProps) {
-  return (
-    <mesh
-      frustumCulled={false}
-      position={position}
-      renderOrder={30}
-      rotation={[Math.PI / 2 + rotation[0], rotation[1], rotation[2]]}
-    >
-      <cylinderGeometry args={[radius, radius, length, 12]} />
-      <meshStandardMaterial
-        color={color}
-        depthTest={false}
-        depthWrite={false}
-        metalness={0.12}
-        roughness={0.72}
-      />
-    </mesh>
-  )
-}
+function stepSpring(
+  offset: Vector3,
+  velocity: Vector3,
+  spring: number,
+  damping: number,
+  delta: number,
+) {
+  velocity.addScaledVector(offset, -spring * delta)
+  velocity.multiplyScalar(Math.exp(-damping * delta))
+  offset.addScaledVector(velocity, delta)
 
-function RifleViewmodel() {
-  const config = WEAPON_VIEWMODEL_CONFIG.rifle
-
-  return (
-    <group frustumCulled={false}>
-      <WeaponPart
-        color={config.primaryColor}
-        position={[0.02, -0.08, -0.04]}
-        size={[0.13, 0.15, 0.48]}
-      />
-      <WeaponPart
-        color={config.secondaryColor}
-        position={[0.04, -0.1, -0.56]}
-        size={[0.06, 0.06, 0.72]}
-      />
-      <WeaponPart
-        color={config.primaryColor}
-        position={[-0.04, -0.04, 0.18]}
-        rotation={[0.1, 0, 0]}
-        size={[0.1, 0.12, 0.34]}
-      />
-      <WeaponPart
-        color={config.accentColor}
-        position={[0.04, 0.02, -0.08]}
-        size={[0.08, 0.06, 0.18]}
-      />
-      <WeaponPart
-        color={config.secondaryColor}
-        position={[0.02, -0.18, 0.02]}
-        rotation={[0.2, 0, 0]}
-        size={[0.05, 0.16, 0.16]}
-      />
-    </group>
-  )
-}
-
-function ShotgunViewmodel() {
-  const config = WEAPON_VIEWMODEL_CONFIG.shotgun
-
-  return (
-    <group frustumCulled={false}>
-      <WeaponPart
-        color={config.primaryColor}
-        position={[0.03, -0.08, -0.02]}
-        size={[0.14, 0.16, 0.42]}
-      />
-      <WeaponPart
-        color={config.secondaryColor}
-        position={[0.04, -0.11, -0.34]}
-        size={[0.13, 0.09, 0.3]}
-      />
-      <WeaponPart
-        color={config.accentColor}
-        position={[0.04, -0.03, -0.72]}
-        size={[0.05, 0.05, 0.82]}
-      />
-      <WeaponPart
-        color={config.secondaryColor}
-        position={[0.04, -0.12, -0.66]}
-        size={[0.04, 0.04, 0.68]}
-      />
-      <WeaponPart
-        color={config.primaryColor}
-        position={[-0.05, -0.03, 0.18]}
-        rotation={[0.12, 0, 0]}
-        size={[0.11, 0.11, 0.32]}
-      />
-    </group>
-  )
-}
-
-function RocketLauncherViewmodel() {
-  const config = WEAPON_VIEWMODEL_CONFIG.rocketLauncher
-
-  return (
-    <group frustumCulled={false}>
-      <WeaponTube
-        color={config.primaryColor}
-        length={1.12}
-        position={[0.04, -0.06, -0.38]}
-        radius={0.11}
-      />
-      <WeaponPart
-        color={config.secondaryColor}
-        position={[-0.02, -0.04, 0.18]}
-        size={[0.24, 0.22, 0.2]}
-      />
-      <WeaponPart
-        color={config.accentColor}
-        position={[0.06, 0.06, -0.1]}
-        size={[0.07, 0.07, 0.16]}
-      />
-      <WeaponPart
-        color={config.secondaryColor}
-        position={[0.02, -0.19, -0.08]}
-        size={[0.08, 0.18, 0.12]}
-      />
-      <WeaponPart
-        color={config.accentColor}
-        position={[0.04, -0.06, -0.86]}
-        rotation={[0.78, 0, 0]}
-        size={[0.14, 0.04, 0.14]}
-      />
-    </group>
-  )
-}
-
-function ViewmodelMesh() {
-  const currentWeaponId = usePlayerWeaponStore((state) => state.currentWeaponId)
-
-  switch (currentWeaponId) {
-    case 'rifle':
-      return <RifleViewmodel />
-    case 'shotgun':
-      return <ShotgunViewmodel />
-    case 'rocketLauncher':
-      return <RocketLauncherViewmodel />
+  if (offset.lengthSq() < 0.000001 && velocity.lengthSq() < 0.000001) {
+    offset.set(0, 0, 0)
+    velocity.set(0, 0, 0)
   }
 }
 
-export function WeaponViewmodel({ shotSequence }: WeaponViewmodelProps) {
+function ViewmodelMaterialLayer({
+  material,
+}: {
+  material: WeaponViewmodelMaterial
+}) {
+  const clearcoat =
+    material.clearcoat ?? (material.metalness > 0.28 ? 0.72 : 0.28)
+  const clearcoatRoughness =
+    material.clearcoatRoughness ??
+    MathUtils.clamp(material.roughness * 0.56, 0.08, 0.7)
+  const ior = material.ior ?? 1.4
+  const sheen = material.sheen ?? (material.metalness > 0.3 ? 0.08 : 0)
+  const sheenRoughness = material.sheenRoughness ?? 0.45
+  const specularIntensity =
+    material.specularIntensity ?? MathUtils.lerp(0.5, 0.84, material.metalness)
+
+  return (
+    <meshPhysicalMaterial
+      clearcoat={clearcoat}
+      clearcoatRoughness={clearcoatRoughness}
+      color={material.color}
+      depthTest={false}
+      depthWrite={false}
+      emissive={material.emissiveColor ?? '#000000'}
+      emissiveIntensity={material.emissiveIntensity ?? 0}
+      ior={ior}
+      metalness={material.metalness}
+      roughness={material.roughness}
+      sheen={sheen}
+      sheenRoughness={sheenRoughness}
+      specularIntensity={specularIntensity}
+    />
+  )
+}
+
+function ViewmodelPartMesh({ material, part }: ViewmodelPartProps) {
+  const axis: WeaponViewmodelAxis = 'axis' in part && part.axis ? part.axis : 'y'
+  const orientation = ORIENTATION_BY_AXIS[axis]
+
+  return (
+    <group position={part.position} rotation={part.rotation}>
+      <mesh
+        castShadow={false}
+        frustumCulled={false}
+        receiveShadow={false}
+        renderOrder={30}
+        rotation={orientation}
+      >
+        {part.shape === 'box' ? <boxGeometry args={part.size} /> : null}
+        {part.shape === 'capsule' ? (
+          <capsuleGeometry
+            args={[
+              part.radius,
+              part.length,
+              part.capSegments ?? 4,
+              part.radialSegments ?? 12,
+            ]}
+          />
+        ) : null}
+        {part.shape === 'cylinder' ? (
+          <cylinderGeometry
+            args={[
+              part.radiusTop,
+              part.radiusBottom,
+              part.length,
+              part.radialSegments ?? 14,
+            ]}
+          />
+        ) : null}
+        {part.shape === 'cone' ? (
+          <coneGeometry
+            args={[part.radius, part.length, part.radialSegments ?? 14]}
+          />
+        ) : null}
+        <ViewmodelMaterialLayer material={material} />
+      </mesh>
+    </group>
+  )
+}
+
+function ViewmodelMesh({
+  muzzleAnchorRef,
+}: {
+  muzzleAnchorRef: RefObject<Object3D | null>
+}) {
+  const currentWeaponId = usePlayerWeaponStore((state) => state.currentWeaponId)
+  const config = WEAPON_VIEWMODEL_CONFIG[currentWeaponId]
+
+  return (
+    <group frustumCulled={false}>
+      <object3D
+        position={config.muzzleLocalPosition}
+        ref={muzzleAnchorRef}
+      />
+      {config.parts.map((part) => (
+        <ViewmodelPartMesh
+          key={part.key}
+          material={config.materials[part.material]}
+          part={part}
+        />
+      ))}
+    </group>
+  )
+}
+
+export const WeaponViewmodel = memo(function WeaponViewmodel({
+  muzzleWorldPositionRef,
+  shotSequenceRef,
+}: WeaponViewmodelProps) {
   const camera = useThree((state) => state.camera)
   const currentWeaponId = usePlayerWeaponStore((state) => state.currentWeaponId)
   const playerAlive = usePlayerHealthStore((state) => state.alive)
   const runState = useRunStore((state) => state.runState)
-  const groupRef = useRef<Group>(null)
+  const rootGroupRef = useRef<Group>(null)
+  const localGroupRef = useRef<Group>(null)
+  const muzzleAnchorRef = useRef<Object3D | null>(null)
   const recoilPositionRef = useRef(new Vector3())
+  const recoilPositionVelocityRef = useRef(new Vector3())
   const recoilRotationRef = useRef(new Vector3())
-  const lastShotSequenceRef = useRef(shotSequence)
+  const recoilRotationVelocityRef = useRef(new Vector3())
+  const lastShotSequenceRef = useRef(0)
 
   useEffect(() => {
     recoilPositionRef.current.set(0, 0, 0)
+    recoilPositionVelocityRef.current.set(0, 0, 0)
     recoilRotationRef.current.set(0, 0, 0)
-    lastShotSequenceRef.current = shotSequence
-  }, [currentWeaponId, shotSequence])
+    recoilRotationVelocityRef.current.set(0, 0, 0)
+    lastShotSequenceRef.current = shotSequenceRef.current
+  }, [currentWeaponId, shotSequenceRef])
 
   useFrame((_, delta) => {
-    const group = groupRef.current
+    const rootGroup = rootGroupRef.current
+    const localGroup = localGroupRef.current
 
-    if (!group) {
+    if (!rootGroup || !localGroup) {
       return
     }
 
     const config = WEAPON_VIEWMODEL_CONFIG[currentWeaponId]
     const isVisible = runState === 'running' && playerAlive
 
-    group.visible = isVisible
+    rootGroup.visible = isVisible
 
     if (!isVisible) {
+      muzzleWorldPositionRef.current = null
       return
     }
 
-    if (lastShotSequenceRef.current !== shotSequence) {
-      const shotDelta = shotSequence - lastShotSequenceRef.current
-      lastShotSequenceRef.current = shotSequence
+    const nextShotSequence = shotSequenceRef.current
 
-      recoilPositionRef.current.x += config.recoilPosition[0] * shotDelta
-      recoilPositionRef.current.y += config.recoilPosition[1] * shotDelta
-      recoilPositionRef.current.z += config.recoilPosition[2] * shotDelta
-      recoilRotationRef.current.x += config.recoilRotation[0] * shotDelta
-      recoilRotationRef.current.y += config.recoilRotation[1] * shotDelta
-      recoilRotationRef.current.z += config.recoilRotation[2] * shotDelta
+    if (nextShotSequence < lastShotSequenceRef.current) {
+      lastShotSequenceRef.current = nextShotSequence
     }
 
-    recoilPositionRef.current.x = MathUtils.damp(
-      recoilPositionRef.current.x,
-      0,
-      config.recoilRecoverySpeed,
+    if (lastShotSequenceRef.current !== nextShotSequence) {
+      const shotDelta = Math.max(
+        0,
+        nextShotSequence - lastShotSequenceRef.current,
+      )
+      lastShotSequenceRef.current = nextShotSequence
+
+      recoilPositionRef.current.x += config.recoilImpulsePosition[0] * shotDelta
+      recoilPositionRef.current.y +=
+        (config.recoilImpulsePosition[1] + config.recoilJitterPosition[1]) *
+        shotDelta
+      recoilPositionRef.current.z +=
+        (config.recoilImpulsePosition[2] + config.recoilJitterPosition[2]) *
+        shotDelta
+
+      recoilRotationRef.current.x +=
+        (config.recoilImpulseRotation[0] + config.recoilJitterRotation[0]) *
+        shotDelta
+      recoilRotationRef.current.y += config.recoilImpulseRotation[1] * shotDelta
+      recoilRotationRef.current.z +=
+        (config.recoilImpulseRotation[2] + config.recoilJitterRotation[2]) *
+        shotDelta
+
+      recoilPositionVelocityRef.current.z += config.recoilImpulsePosition[2] * 1.6
+      recoilRotationVelocityRef.current.x += config.recoilImpulseRotation[0] * 1.2
+    }
+
+    stepSpring(
+      recoilPositionRef.current,
+      recoilPositionVelocityRef.current,
+      config.recoilSpring,
+      config.recoilDamping,
       delta,
     )
-    recoilPositionRef.current.y = MathUtils.damp(
-      recoilPositionRef.current.y,
-      0,
-      config.recoilRecoverySpeed,
-      delta,
-    )
-    recoilPositionRef.current.z = MathUtils.damp(
-      recoilPositionRef.current.z,
-      0,
-      config.recoilRecoverySpeed,
-      delta,
-    )
-    recoilRotationRef.current.x = MathUtils.damp(
-      recoilRotationRef.current.x,
-      0,
-      config.recoilRecoverySpeed,
-      delta,
-    )
-    recoilRotationRef.current.y = MathUtils.damp(
-      recoilRotationRef.current.y,
-      0,
-      config.recoilRecoverySpeed,
-      delta,
-    )
-    recoilRotationRef.current.z = MathUtils.damp(
-      recoilRotationRef.current.z,
-      0,
-      config.recoilRecoverySpeed,
+    stepSpring(
+      recoilRotationRef.current,
+      recoilRotationVelocityRef.current,
+      config.recoilSpring,
+      config.recoilDamping,
       delta,
     )
 
@@ -284,24 +255,41 @@ export function WeaponViewmodel({ shotSequence }: WeaponViewmodelProps) {
       config.transformPosition[0] + recoilPositionRef.current.x,
       config.transformPosition[1] + recoilPositionRef.current.y,
       config.transformPosition[2] + recoilPositionRef.current.z,
-    ).applyQuaternion(camera.quaternion)
-
-    group.position.copy(camera.position).add(VIEWMODEL_OFFSET)
-
-    RECOIL_POSITION.copy(recoilPositionRef.current)
-    RECOIL_ROTATION.copy(recoilRotationRef.current)
-    LOCAL_ROTATION.set(
-      config.transformRotation[0] + RECOIL_ROTATION.x,
-      config.transformRotation[1] + RECOIL_ROTATION.y,
-      config.transformRotation[2] + RECOIL_ROTATION.z,
     )
-    LOCAL_QUATERNION.setFromEuler(LOCAL_ROTATION)
-    group.quaternion.copy(camera.quaternion).multiply(LOCAL_QUATERNION)
+
+    rootGroup.position.copy(camera.position)
+    rootGroup.quaternion.copy(camera.quaternion)
+    localGroup.position.copy(VIEWMODEL_OFFSET)
+
+    LOCAL_ROTATION.set(
+      config.transformRotation[0] + recoilRotationRef.current.x,
+      config.transformRotation[1] + recoilRotationRef.current.y,
+      config.transformRotation[2] + recoilRotationRef.current.z,
+    )
+
+    localGroup.rotation.copy(LOCAL_ROTATION)
+    rootGroup.updateMatrixWorld()
+
+    const muzzleAnchor = muzzleAnchorRef.current
+
+    if (!muzzleAnchor) {
+      muzzleWorldPositionRef.current = null
+      return
+    }
+
+    muzzleAnchor.getWorldPosition(MUZZLE_WORLD_POSITION)
+    muzzleWorldPositionRef.current = [
+      MUZZLE_WORLD_POSITION.x,
+      MUZZLE_WORLD_POSITION.y,
+      MUZZLE_WORLD_POSITION.z,
+    ]
   })
 
   return (
-    <group ref={groupRef}>
-      <ViewmodelMesh />
+    <group ref={rootGroupRef}>
+      <group ref={localGroupRef}>
+        <ViewmodelMesh muzzleAnchorRef={muzzleAnchorRef} />
+      </group>
     </group>
   )
-}
+})

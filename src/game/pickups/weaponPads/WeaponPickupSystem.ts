@@ -11,6 +11,7 @@ export type WeaponPickupId = (typeof WEAPON_PICKUP_SPAWNS)[number]['id']
 export type WeaponPickupState = {
   active: boolean
   color: string
+  glowColor: string
   id: WeaponPickupId
   position: [number, number, number]
   respawnDeadlineMs: number | null
@@ -30,6 +31,7 @@ function createInitialPickupState(
   return {
     active: true,
     color: pickup.color,
+    glowColor: pickup.glowColor,
     id: pickup.id,
     position: pickup.position,
     respawnDeadlineMs: null,

@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 
+import { debugGameLog } from '../../../shared/constants/debug.ts'
+
 const BEST_SCORE_STORAGE_KEY = 'arena-shooter-best-score'
 
 type ScoreStore = {
@@ -56,7 +58,7 @@ export const useScoreStore = create<ScoreStore>((set) => ({
         writeBestScore(nextBestScore)
       }
 
-      console.log(`Score +${scoreAmount} from ${source}. ${nextScore} total.`)
+      debugGameLog(`Score +${scoreAmount} from ${source}. ${nextScore} total.`)
 
       return {
         bestScore: nextBestScore,

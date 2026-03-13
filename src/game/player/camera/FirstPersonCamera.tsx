@@ -137,7 +137,7 @@ export function FirstPersonCamera({ bodyRef }: FirstPersonCameraProps) {
     )
 
     applyLookRotation(cameraRef.current, pitchRef.current, yawRef.current)
-  })
+  }, -1)
 
   return null
 }

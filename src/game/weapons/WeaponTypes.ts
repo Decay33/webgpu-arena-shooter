@@ -5,22 +5,31 @@ export type WeaponId = 'rifle' | 'shotgun' | 'rocketLauncher'
 export type WeaponFireType = 'hitscan' | 'projectile'
 
 export type WeaponVisualSettings = {
+  impactAccentColor: string
+  impactColor: string
+  impactGlowColor: string
+  impactLifetimeMs: number
+  impactRingSize: number
+  impactSparkLength: number
+  impactSparkWidth: number
+  impactSize: number
   muzzleFlashColor: string
   muzzleFlashDistance: number
   muzzleFlashGlowColor: string
   muzzleFlashLength: number
   muzzleFlashLifetimeMs: number
+  muzzleFlashLightDistance: number
+  muzzleFlashLightIntensity: number
+  muzzleFlashSecondaryColor: string
   muzzleFlashSize: number
-  impactColor: string
-  impactGlowColor: string
-  impactLifetimeMs: number
-  impactRingSize: number
-  impactSize: number
+  muzzleFlashSparkColor: string
   tracerColor: string
   tracerGlowColor: string
   tracerGlowThickness: number
   tracerLifetimeMs: number
   tracerThickness: number
+  tracerTipColor: string
+  tracerTipSize: number
 }
 
 export type WeaponRay = {
@@ -61,20 +70,27 @@ export type WeaponProjectileSpawn = {
   color: string
   damage: number
   direction: [number, number, number]
+  explosionAccentColor: string
   explosionColor: string
   explosionGlowColor: string
   explosionLifetimeMs: number
+  explosionLightDistance: number
+  explosionLightIntensity: number
   explosionRingColor: string
   explosionRingSize: number
+  explosionSparkColor: string
   explosionSize: number
   glowColor: string
   maxDistance: number
   position: [number, number, number]
   size: number
   speed: number
+  trailAccentColor: string
   trailColor: string
   trailLength: number
+  trailPulseSize: number
   trailSize: number
+  trailTipColor: string
 }
 
 export type WeaponShotResult = {

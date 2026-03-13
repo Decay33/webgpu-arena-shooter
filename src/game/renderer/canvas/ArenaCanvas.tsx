@@ -4,6 +4,7 @@ import { Canvas } from '@react-three/fiber'
 
 import { FpsProbe } from './FpsProbe.tsx'
 import { TestRoomScene } from './TestRoomScene.tsx'
+import { ArenaPostProcessing } from '../postfx/ArenaPostProcessing.tsx'
 import { useRendererStore } from '../state/rendererStore.ts'
 import { createGameRenderer } from '../webgpu/createGameRenderer.ts'
 
@@ -29,6 +30,7 @@ export const ArenaCanvas = memo(function ArenaCanvas() {
       shadows
     >
       <TestRoomScene />
+      <ArenaPostProcessing />
       <FpsProbe />
     </Canvas>
   )

@@ -17,6 +17,7 @@ import { usePlayerHealthStore } from '../health/playerHealthStore.ts'
 import { useRendererStore } from '../../renderer/state/rendererStore.ts'
 import { WeaponEffects } from '../../weapons/WeaponEffects.tsx'
 import { useWeaponSystem } from '../../weapons/WeaponSystem.ts'
+import type { WeaponVfxController } from '../../weapons/WeaponVfxTypes.ts'
 import { WeaponViewmodel } from '../../weapons/WeaponViewmodel.tsx'
 import { useWeaponSwitchInput } from '../../weapons/useWeaponSwitchInput.ts'
 import { PLAYER_COLLISION_GROUPS } from '../../../shared/constants/collisionGroups.ts'
@@ -47,9 +48,15 @@ export function PlayerController({ bodyRef }: PlayerControllerProps) {
   const playerAlive = usePlayerHealthStore((state) => state.alive)
   const pointerLocked = useRendererStore((state) => state.pointerLocked)
   const setPlayerDebug = useRendererStore((state) => state.setPlayerDebug)
-  const weaponEffects = useWeaponSystem({ bodyRef })
   const debugTimerRef = useRef(0)
   const jumpPressedRef = useRef(false)
+  const muzzleWorldPositionRef = useRef<[number, number, number] | null>(null)
+  const weaponVfxControllerRef = useRef<WeaponVfxController | null>(null)
+  const weaponSystem = useWeaponSystem({
+    bodyRef,
+    muzzleWorldPositionRef,
+    vfxControllerRef: weaponVfxControllerRef,
+  })
 
   useWeaponSwitchInput()
 
@@ -189,8 +196,11 @@ export function PlayerController({ bodyRef }: PlayerControllerProps) {
           friction={0}
         />
       </RigidBody>
-      <WeaponEffects effects={weaponEffects} />
-      <WeaponViewmodel shotSequence={weaponEffects.shotSequence} />
+      <WeaponEffects ref={weaponVfxControllerRef} />
+      <WeaponViewmodel
+        muzzleWorldPositionRef={muzzleWorldPositionRef}
+        shotSequenceRef={weaponSystem.shotSequenceRef}
+      />
     </>
   )
 }

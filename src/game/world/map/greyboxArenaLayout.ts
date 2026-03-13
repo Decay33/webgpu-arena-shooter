@@ -1,5 +1,9 @@
 import type { EnemyKind } from '../../enemies/EnemyTypes.ts'
 import type { WeaponId } from '../../weapons/WeaponTypes.ts'
+import {
+  ARENA_SURFACE_COLORS,
+  type ArenaMaterialPresetId,
+} from '../../config/arenaVisuals.ts'
 
 export type ArenaPoint = [number, number, number]
 export type RampDirection =
@@ -14,6 +18,7 @@ export type GreyboxBlockDefinition = {
   key: string
   emissiveColor?: string
   emissiveIntensity?: number
+  materialPreset?: ArenaMaterialPresetId
   metalness?: number
   opacity?: number
   position: ArenaPoint
@@ -38,18 +43,6 @@ const WALL_THICKNESS = 1
 const WALL_HALF_WIDTH = ARENA_WIDTH / 2
 const WALL_HALF_DEPTH = ARENA_DEPTH / 2
 
-const COLORS = {
-  accentCenter: '#9fe7ff',
-  accentEast: '#ff8a5b',
-  accentNorth: '#6ed7ff',
-  accentWest: '#ffbf5f',
-  cover: '#6e86a0',
-  floor: '#31465d',
-  platform: '#7c9277',
-  ramp: '#a97a54',
-  wall: '#d8e1ea',
-} as const
-
 function createWall(
   key: string,
   position: ArenaPoint,
@@ -57,12 +50,11 @@ function createWall(
 ): GreyboxBlockDefinition {
   return {
     castShadow: true,
-    color: COLORS.wall,
+    color: ARENA_SURFACE_COLORS.wall,
     key,
-    metalness: 0.04,
+    materialPreset: 'wall',
     position,
     receiveShadow: true,
-    roughness: 0.78,
     size,
   }
 }
@@ -75,13 +67,12 @@ function createCover(
 ): GreyboxBlockDefinition {
   return {
     castShadow: true,
-    color: COLORS.cover,
+    color: ARENA_SURFACE_COLORS.cover,
     key,
-    metalness: 0.05,
+    materialPreset: 'cover',
     position,
     receiveShadow: true,
     rotation,
-    roughness: 0.88,
     size,
   }
 }
@@ -94,13 +85,12 @@ function createRamp(
 ): GreyboxBlockDefinition {
   return {
     castShadow: true,
-    color: COLORS.ramp,
+    color: ARENA_SURFACE_COLORS.ramp,
     key,
-    metalness: 0.05,
+    materialPreset: 'ramp',
     position,
     rampDirection,
     receiveShadow: true,
-    roughness: 0.74,
     shape: 'ramp',
     size,
   }
@@ -121,6 +111,7 @@ function createAccent(
     emissiveColor: color,
     emissiveIntensity,
     key,
+    materialPreset: 'accent',
     metalness: 0.14,
     opacity: 0.92,
     position,
@@ -136,13 +127,12 @@ export const GREYBOX_ARENA_PLAYER_SPAWN_POSITION: ArenaPoint = [0, 2.2, 20]
 
 export const GREYBOX_ARENA_FLOOR_BLOCK: GreyboxBlockDefinition = {
   castShadow: false,
-  color: COLORS.floor,
+  color: ARENA_SURFACE_COLORS.floor,
   key: 'floor',
-  metalness: 0.08,
+  materialPreset: 'floor',
   opacity: 1,
   position: [0, FLOOR_POSITION_Y, 0],
   receiveShadow: true,
-  roughness: 0.94,
   size: [ARENA_WIDTH, FLOOR_THICKNESS, ARENA_DEPTH],
 }
 
@@ -198,34 +188,31 @@ const GREYBOX_ARENA_ROUTE_BLOCKERS: GreyboxBlockDefinition[] = [
 const GREYBOX_ARENA_ELEVATION_BLOCKS: GreyboxBlockDefinition[] = [
   {
     castShadow: true,
-    color: COLORS.platform,
+    color: ARENA_SURFACE_COLORS.platform,
     key: 'west-shotgun-platform',
-    metalness: 0.06,
+    materialPreset: 'platform',
     position: [-20, 1.2, -4],
     receiveShadow: true,
-    roughness: 0.8,
     size: [10, 2.4, 10],
   },
   createRamp('west-shotgun-ramp', [-11, 1.2, -4], [8, 2.4, 5.6], 'negativeX'),
   {
     castShadow: true,
-    color: COLORS.platform,
+    color: ARENA_SURFACE_COLORS.platform,
     key: 'east-rocket-platform',
-    metalness: 0.06,
+    materialPreset: 'platform',
     position: [20, 1.2, 5],
     receiveShadow: true,
-    roughness: 0.8,
     size: [10, 2.4, 10],
   },
   createRamp('east-rocket-ramp', [11, 1.2, 5], [8, 2.4, 5.6], 'positiveX'),
   {
     castShadow: true,
-    color: COLORS.platform,
+    color: ARENA_SURFACE_COLORS.platform,
     key: 'north-overlook-platform',
-    metalness: 0.06,
+    materialPreset: 'platform',
     position: [0, 0.8, -19],
     receiveShadow: true,
-    roughness: 0.8,
     size: [10, 1.6, 6],
   },
   createRamp('north-overlook-ramp', [0, 0.8, -13], [5.6, 1.6, 6], 'negativeZ'),
@@ -236,28 +223,28 @@ export const GREYBOX_ARENA_DECORATIVE_BLOCKS: GreyboxBlockDefinition[] = [
     'center-pillar-cap',
     [0, 4.18, 0],
     [4.26, 0.1, 4.26],
-    COLORS.accentCenter,
+    ARENA_SURFACE_COLORS.accentCenter,
     0.34,
   ),
   createAccent(
     'west-platform-edge',
     [-20, 2.46, 0.84],
     [8.3, 0.06, 0.14],
-    COLORS.accentWest,
+    ARENA_SURFACE_COLORS.accentWest,
     0.86,
   ),
   createAccent(
     'east-platform-edge',
     [20, 2.46, 9.16],
     [8.3, 0.06, 0.14],
-    COLORS.accentEast,
+    ARENA_SURFACE_COLORS.accentEast,
     0.88,
   ),
   createAccent(
     'north-overlook-strip',
     [0, 1.66, -16.12],
     [7.8, 0.06, 0.14],
-    COLORS.accentNorth,
+    ARENA_SURFACE_COLORS.accentNorth,
     0.78,
   ),
 ]

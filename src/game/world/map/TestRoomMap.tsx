@@ -3,6 +3,7 @@ import { useEffect, useMemo } from 'react'
 import { CuboidCollider, RigidBody, TrimeshCollider } from '@react-three/rapier'
 import { ExtrudeGeometry, Float32BufferAttribute, Shape } from 'three'
 
+import { ARENA_MATERIAL_PRESETS } from '../../config/arenaVisuals.ts'
 import { WORLD_COLLISION_GROUPS } from '../../../shared/constants/collisionGroups.ts'
 import {
   GREYBOX_ARENA_DECORATIVE_BLOCKS,
@@ -69,6 +70,35 @@ function createRampGeometry(
   }
 }
 
+function GreyboxMaterial({
+  block,
+}: {
+  block: GreyboxBlockDefinition
+}) {
+  const materialPreset = ARENA_MATERIAL_PRESETS[block.materialPreset ?? 'cover']
+
+  return (
+    <meshPhysicalMaterial
+      attenuationDistance={6}
+      clearcoat={materialPreset.clearcoat}
+      clearcoatRoughness={materialPreset.clearcoatRoughness}
+      color={block.color}
+      emissive={block.emissiveColor ?? '#000000'}
+      emissiveIntensity={
+        (block.emissiveIntensity ?? 0) * materialPreset.emissiveIntensityMultiplier
+      }
+      ior={materialPreset.ior}
+      metalness={block.metalness ?? materialPreset.baseMetalness}
+      opacity={block.opacity ?? 1}
+      roughness={block.roughness ?? materialPreset.baseRoughness}
+      specularIntensity={materialPreset.specularIntensity}
+      thickness={materialPreset.thickness}
+      transmission={materialPreset.transmission}
+      transparent={block.transparent ?? false}
+    />
+  )
+}
+
 function RampBlock({
   block,
 }: {
@@ -112,14 +142,17 @@ function RampBlock({
         geometry={rampGeometry.geometry}
         receiveShadow={receiveShadow}
       >
-        <meshStandardMaterial
-          color={color}
-          emissive={emissiveColor}
-          emissiveIntensity={emissiveIntensity}
-          metalness={metalness}
-          opacity={opacity}
-          roughness={roughness}
-          transparent={transparent}
+        <GreyboxMaterial
+          block={{
+            ...block,
+            color,
+            emissiveColor,
+            emissiveIntensity,
+            metalness,
+            opacity,
+            roughness,
+            transparent,
+          }}
         />
       </mesh>
       {collidable ? (
@@ -176,14 +209,17 @@ function GreyboxBlock({
     >
       <mesh castShadow={castShadow} receiveShadow={receiveShadow}>
         <boxGeometry args={size} />
-        <meshStandardMaterial
-          color={color}
-          emissive={emissiveColor}
-          emissiveIntensity={emissiveIntensity}
-          metalness={metalness}
-          opacity={opacity}
-          roughness={roughness}
-          transparent={transparent}
+        <GreyboxMaterial
+          block={{
+            ...block,
+            color,
+            emissiveColor,
+            emissiveIntensity,
+            metalness,
+            opacity,
+            roughness,
+            transparent,
+          }}
         />
       </mesh>
       {collidable ? (

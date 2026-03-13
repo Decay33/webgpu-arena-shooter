@@ -1,15 +1,31 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import {
+  useEffect,
+  useRef,
+  type MutableRefObject,
+  type RefObject,
+} from 'react'
 
 import { type RapierRigidBody, useRapier } from '@react-three/rapier'
 import { useFrame, useThree } from '@react-three/fiber'
+import { Euler, Quaternion, Vector3 } from 'three'
 
+import { debugGameLog } from '../../shared/constants/debug.ts'
 import { getCameraRay, raycastWorld } from '../combat/RaycastSystem.ts'
+import { WEAPON_VIEWMODEL_CONFIG } from '../config/weaponViewmodels.ts'
 import { applyDamageToEnemyByCollider } from '../enemies/EnemyRegistry.ts'
 import { applyDamageToEnemiesInRadius } from '../enemies/EnemySystem.ts'
 import { useRunStore } from '../core/state/runStore.ts'
 import { usePlayerHealthStore } from '../player/health/playerHealthStore.ts'
 import { useRendererStore } from '../renderer/state/rendererStore.ts'
 import { createWeaponById } from './WeaponRegistry.ts'
+import type {
+  Explosion,
+  HitMarker,
+  MuzzleFlash,
+  Tracer,
+  WeaponProjectile,
+  WeaponVfxController,
+} from './WeaponVfxTypes.ts'
 import { usePlayerWeaponStore } from './playerWeaponStore.ts'
 import { WEAPON_AMMO_CONFIG } from './weaponAmmoConfig.ts'
 import type {
@@ -21,68 +37,14 @@ import type {
   WeaponTraceResult,
 } from './WeaponTypes.ts'
 
-export type HitMarker = {
-  color: string
-  createdAt: number
-  glowColor: string
-  id: number
-  lifetimeMs: number
-  normal: [number, number, number]
-  position: [number, number, number]
-  ringSize: number
-  size: number
-}
-
-export type MuzzleFlash = {
-  color: string
-  createdAt: number
-  direction: [number, number, number]
-  glowColor: string
-  id: number
-  length: number
-  lifetimeMs: number
-  position: [number, number, number]
-  size: number
-}
-
-export type Tracer = {
-  color: string
-  end: [number, number, number]
-  glowColor: string
-  glowThickness: number
-  id: number
-  start: [number, number, number]
-  thickness: number
-}
-
-export type WeaponProjectile = WeaponProjectileSpawn & {
-  distanceTraveled: number
-  id: number
-}
-
-export type Explosion = {
-  color: string
-  createdAt: number
-  glowColor: string
-  id: number
-  lifetimeMs: number
-  position: [number, number, number]
-  ringColor: string
-  ringSize: number
-  size: number
-}
-
 export type WeaponSystemProps = {
   bodyRef: RefObject<RapierRigidBody | null>
+  muzzleWorldPositionRef: MutableRefObject<[number, number, number] | null>
+  vfxControllerRef: MutableRefObject<WeaponVfxController | null>
 }
 
-export type WeaponEffectsState = {
-  explosions: Explosion[]
-  hitMarkers: HitMarker[]
-  muzzleFlashes: MuzzleFlash[]
-  projectiles: WeaponProjectile[]
-  shotSequence: number
-  tracers: Tracer[]
+export type WeaponSystemResult = {
+  shotSequenceRef: MutableRefObject<number>
 }
 
 type FiredShot = WeaponShotResult & {
@@ -91,6 +53,11 @@ type FiredShot = WeaponShotResult & {
 
 const HIT_MARKER_NORMAL_OFFSET = 0.08
 const ROCKET_EXPLOSION_SOURCE = 'rocketLauncher:explosion'
+const MUZZLE_LOCAL_ROTATION = new Euler(0, 0, 0, 'XYZ')
+const MUZZLE_LOCAL_QUATERNION = new Quaternion()
+const MUZZLE_LOCAL_OFFSET = new Vector3()
+const MUZZLE_TRANSFORM_OFFSET = new Vector3()
+const MUZZLE_WORLD_OFFSET = new Vector3()
 
 function offsetHitMarkerPosition(
   point: [number, number, number],
@@ -115,6 +82,46 @@ function offsetAlongRay(
   ]
 }
 
+function getViewmodelMuzzlePosition(
+  camera: {
+    position: Vector3
+    quaternion: Quaternion
+  },
+  weaponId: WeaponId,
+  muzzleWorldPositionRef: MutableRefObject<[number, number, number] | null>,
+): [number, number, number] {
+  if (muzzleWorldPositionRef.current) {
+    return muzzleWorldPositionRef.current
+  }
+
+  const config = WEAPON_VIEWMODEL_CONFIG[weaponId]
+
+  MUZZLE_LOCAL_ROTATION.set(
+    config.transformRotation[0],
+    config.transformRotation[1],
+    config.transformRotation[2],
+  )
+  MUZZLE_LOCAL_QUATERNION.setFromEuler(MUZZLE_LOCAL_ROTATION)
+  MUZZLE_TRANSFORM_OFFSET.set(
+    config.transformPosition[0],
+    config.transformPosition[1],
+    config.transformPosition[2],
+  )
+  MUZZLE_LOCAL_OFFSET.set(
+    config.muzzleLocalPosition[0],
+    config.muzzleLocalPosition[1],
+    config.muzzleLocalPosition[2],
+  ).applyQuaternion(MUZZLE_LOCAL_QUATERNION)
+
+  MUZZLE_WORLD_OFFSET
+    .copy(MUZZLE_TRANSFORM_OFFSET)
+    .add(MUZZLE_LOCAL_OFFSET)
+    .applyQuaternion(camera.quaternion)
+    .add(camera.position)
+
+  return [MUZZLE_WORLD_OFFSET.x, MUZZLE_WORLD_OFFSET.y, MUZZLE_WORLD_OFFSET.z]
+}
+
 function getOrCreateWeaponInstance(
   weaponInstances: Partial<Record<WeaponId, Weapon>>,
   weaponId: WeaponId,
@@ -135,176 +142,179 @@ function getOrCreateWeaponInstance(
   return nextWeapon
 }
 
+function createHitMarker(
+  effectId: number,
+  shotResult: FiredShot,
+  point: [number, number, number],
+  normal: [number, number, number],
+  createdAt: number,
+): HitMarker | null {
+  if (shotResult.definition.visuals.impactLifetimeMs <= 0) {
+    return null
+  }
+
+  return {
+    accentColor: shotResult.definition.visuals.impactAccentColor,
+    color: shotResult.definition.visuals.impactColor,
+    createdAt,
+    glowColor: shotResult.definition.visuals.impactGlowColor,
+    id: effectId,
+    lifetimeMs: shotResult.definition.visuals.impactLifetimeMs,
+    normal,
+    position: offsetHitMarkerPosition(point, normal),
+    ringSize: shotResult.definition.visuals.impactRingSize,
+    sparkLength: shotResult.definition.visuals.impactSparkLength,
+    sparkWidth: shotResult.definition.visuals.impactSparkWidth,
+    size: shotResult.definition.visuals.impactSize,
+  }
+}
+
+function createMuzzleFlash(
+  effectId: number,
+  camera: {
+    position: Vector3
+    quaternion: Quaternion
+  },
+  muzzleWorldPositionRef: MutableRefObject<[number, number, number] | null>,
+  shotResult: FiredShot,
+  createdAt: number,
+): MuzzleFlash | null {
+  if (shotResult.definition.visuals.muzzleFlashLifetimeMs <= 0) {
+    return null
+  }
+
+  const muzzlePosition = getViewmodelMuzzlePosition(
+    camera,
+    shotResult.definition.id,
+    muzzleWorldPositionRef,
+  )
+
+  return {
+    color: shotResult.definition.visuals.muzzleFlashColor,
+    createdAt,
+    direction: shotResult.ray.direction,
+    glowColor: shotResult.definition.visuals.muzzleFlashGlowColor,
+    id: effectId,
+    length: shotResult.definition.visuals.muzzleFlashLength,
+    lifetimeMs: shotResult.definition.visuals.muzzleFlashLifetimeMs,
+    lightDistance: shotResult.definition.visuals.muzzleFlashLightDistance,
+    lightIntensity: shotResult.definition.visuals.muzzleFlashLightIntensity,
+    position: offsetAlongRay(
+      muzzlePosition,
+      shotResult.ray.direction,
+      shotResult.definition.visuals.muzzleFlashDistance,
+    ),
+    secondaryColor: shotResult.definition.visuals.muzzleFlashSecondaryColor,
+    size: shotResult.definition.visuals.muzzleFlashSize,
+    sparkColor: shotResult.definition.visuals.muzzleFlashSparkColor,
+  }
+}
+
+function createProjectile(
+  effectId: number,
+  projectile: WeaponProjectileSpawn,
+): WeaponProjectile {
+  return {
+    ...projectile,
+    distanceTraveled: 0,
+    id: effectId,
+    position: offsetAlongRay(
+      projectile.position,
+      projectile.direction,
+      projectile.size + 0.75,
+    ),
+  }
+}
+
+function createTracer(
+  effectId: number,
+  camera: {
+    position: Vector3
+    quaternion: Quaternion
+  },
+  muzzleWorldPositionRef: MutableRefObject<[number, number, number] | null>,
+  shotResult: FiredShot,
+  trace: WeaponTraceResult,
+  createdAt: number,
+): Tracer | null {
+  if (shotResult.definition.visuals.tracerLifetimeMs <= 0) {
+    return null
+  }
+
+  return {
+    color: shotResult.definition.visuals.tracerColor,
+    createdAt,
+    end:
+      trace.hit?.point ??
+      offsetAlongRay(
+        shotResult.ray.origin,
+        trace.direction,
+        shotResult.definition.maxDistance,
+      ),
+    glowColor: shotResult.definition.visuals.tracerGlowColor,
+    glowThickness: shotResult.definition.visuals.tracerGlowThickness,
+    id: effectId,
+    lifetimeMs: shotResult.definition.visuals.tracerLifetimeMs,
+    start: offsetAlongRay(
+      getViewmodelMuzzlePosition(
+        camera,
+        shotResult.definition.id,
+        muzzleWorldPositionRef,
+      ),
+      trace.direction,
+      shotResult.definition.visuals.muzzleFlashDistance * 0.5,
+    ),
+    thickness: shotResult.definition.visuals.tracerThickness,
+    tipColor: shotResult.definition.visuals.tracerTipColor,
+    tipSize: shotResult.definition.visuals.tracerTipSize,
+  }
+}
+
+function createExplosion(
+  effectId: number,
+  projectile: WeaponProjectile,
+  position: [number, number, number],
+  createdAt: number,
+): Explosion | null {
+  if (projectile.explosionLifetimeMs <= 0) {
+    return null
+  }
+
+  return {
+    accentColor: projectile.explosionAccentColor,
+    color: projectile.explosionColor,
+    createdAt,
+    glowColor: projectile.explosionGlowColor,
+    id: effectId,
+    lifetimeMs: projectile.explosionLifetimeMs,
+    lightDistance: projectile.explosionLightDistance,
+    lightIntensity: projectile.explosionLightIntensity,
+    position,
+    ringColor: projectile.explosionRingColor,
+    ringSize: projectile.explosionRingSize,
+    sparkColor: projectile.explosionSparkColor,
+    size: projectile.explosionSize,
+  }
+}
+
 export function useWeaponSystem({
   bodyRef,
-}: WeaponSystemProps): WeaponEffectsState {
+  muzzleWorldPositionRef,
+  vfxControllerRef,
+}: WeaponSystemProps): WeaponSystemResult {
   const camera = useThree((state) => state.camera)
   const currentWeaponId = usePlayerWeaponStore((state) => state.currentWeaponId)
   const playerAlive = usePlayerHealthStore((state) => state.alive)
   const pointerLocked = useRendererStore((state) => state.pointerLocked)
   const runState = useRunStore((state) => state.runState)
   const { rapier, world } = useRapier()
-  const [explosions, setExplosions] = useState<Explosion[]>([])
-  const [hitMarkers, setHitMarkers] = useState<HitMarker[]>([])
-  const [muzzleFlashes, setMuzzleFlashes] = useState<MuzzleFlash[]>([])
-  const [projectiles, setProjectiles] = useState<WeaponProjectile[]>([])
-  const [shotSequence, setShotSequence] = useState(0)
-  const [tracers, setTracers] = useState<Tracer[]>([])
   const weaponInstancesRef = useRef<Partial<Record<WeaponId, Weapon>>>({})
   const projectilesRef = useRef<WeaponProjectile[]>([])
+  const shotSequenceRef = useRef(0)
   const effectIdRef = useRef(0)
-  const effectTimeoutsRef = useRef<number[]>([])
   const effectsClearedRef = useRef(false)
 
   useEffect(() => {
-    projectilesRef.current = projectiles
-  }, [projectiles])
-
-  useEffect(() => {
-    return () => {
-      effectTimeoutsRef.current.forEach((timeoutId) =>
-        window.clearTimeout(timeoutId),
-      )
-    }
-  }, [])
-
-  useEffect(() => {
-    const spawnHitMarker = (
-      shotResult: FiredShot,
-      point: [number, number, number],
-      normal: [number, number, number],
-    ) => {
-      if (shotResult.definition.visuals.impactLifetimeMs <= 0) {
-        return
-      }
-
-      const id = effectIdRef.current++
-      const position = offsetHitMarkerPosition(point, normal)
-      const createdAt = performance.now()
-
-      setHitMarkers((currentMarkers) => [
-        ...currentMarkers,
-        {
-          color: shotResult.definition.visuals.impactColor,
-          createdAt,
-          glowColor: shotResult.definition.visuals.impactGlowColor,
-          id,
-          lifetimeMs: shotResult.definition.visuals.impactLifetimeMs,
-          normal,
-          position,
-          ringSize: shotResult.definition.visuals.impactRingSize,
-          size: shotResult.definition.visuals.impactSize,
-        },
-      ])
-
-      const timeoutId = window.setTimeout(() => {
-        setHitMarkers((currentMarkers) =>
-          currentMarkers.filter((marker) => marker.id !== id),
-        )
-        effectTimeoutsRef.current = effectTimeoutsRef.current.filter(
-          (trackedTimeoutId) => trackedTimeoutId !== timeoutId,
-        )
-      }, shotResult.definition.visuals.impactLifetimeMs)
-
-      effectTimeoutsRef.current.push(timeoutId)
-    }
-
-    const spawnMuzzleFlash = (shotResult: FiredShot) => {
-      const id = effectIdRef.current++
-      const position = offsetAlongRay(
-        shotResult.ray.origin,
-        shotResult.ray.direction,
-        shotResult.definition.visuals.muzzleFlashDistance,
-      )
-      const createdAt = performance.now()
-
-      setMuzzleFlashes((currentFlashes) => [
-        ...currentFlashes,
-        {
-          color: shotResult.definition.visuals.muzzleFlashColor,
-          createdAt,
-          direction: shotResult.ray.direction,
-          glowColor: shotResult.definition.visuals.muzzleFlashGlowColor,
-          id,
-          length: shotResult.definition.visuals.muzzleFlashLength,
-          lifetimeMs: shotResult.definition.visuals.muzzleFlashLifetimeMs,
-          position,
-          size: shotResult.definition.visuals.muzzleFlashSize,
-        },
-      ])
-
-      const timeoutId = window.setTimeout(() => {
-        setMuzzleFlashes((currentFlashes) =>
-          currentFlashes.filter((flash) => flash.id !== id),
-        )
-        effectTimeoutsRef.current = effectTimeoutsRef.current.filter(
-          (trackedTimeoutId) => trackedTimeoutId !== timeoutId,
-        )
-      }, shotResult.definition.visuals.muzzleFlashLifetimeMs)
-
-      effectTimeoutsRef.current.push(timeoutId)
-    }
-
-    const spawnProjectile = (projectile: WeaponProjectileSpawn) => {
-      const id = effectIdRef.current++
-      const nextProjectile: WeaponProjectile = {
-        ...projectile,
-        distanceTraveled: 0,
-        id,
-        position: offsetAlongRay(
-          projectile.position,
-          projectile.direction,
-          projectile.size + 0.75,
-        ),
-      }
-
-      setProjectiles((currentProjectiles) => {
-        const nextProjectiles = [...currentProjectiles, nextProjectile]
-        projectilesRef.current = nextProjectiles
-        return nextProjectiles
-      })
-    }
-
-    const spawnTracer = (shotResult: FiredShot, trace: WeaponTraceResult) => {
-      const id = effectIdRef.current++
-      const start = offsetAlongRay(
-        shotResult.ray.origin,
-        trace.direction,
-        shotResult.definition.visuals.muzzleFlashDistance,
-      )
-      const end =
-        trace.hit?.point ??
-        offsetAlongRay(
-          shotResult.ray.origin,
-          trace.direction,
-          shotResult.definition.maxDistance,
-        )
-
-      setTracers((currentTracers) => [
-        ...currentTracers,
-        {
-          color: shotResult.definition.visuals.tracerColor,
-          end,
-          glowColor: shotResult.definition.visuals.tracerGlowColor,
-          glowThickness: shotResult.definition.visuals.tracerGlowThickness,
-          id,
-          start,
-          thickness: shotResult.definition.visuals.tracerThickness,
-        },
-      ])
-
-      const timeoutId = window.setTimeout(() => {
-        setTracers((currentTracers) =>
-          currentTracers.filter((tracer) => tracer.id !== id),
-        )
-        effectTimeoutsRef.current = effectTimeoutsRef.current.filter(
-          (trackedTimeoutId) => trackedTimeoutId !== timeoutId,
-        )
-      }, shotResult.definition.visuals.tracerLifetimeMs)
-
-      effectTimeoutsRef.current.push(timeoutId)
-    }
-
     const handleMouseDown = (event: MouseEvent) => {
       if (
         event.button !== 0 ||
@@ -332,9 +342,10 @@ export function useWeaponSystem({
         return
       }
 
+      const shotNowMs = performance.now()
       const shotRay = getCameraRay(camera)
       const shotResult = equippedWeapon.tryFire({
-        now: performance.now() / 1000,
+        now: shotNowMs / 1000,
         ray: shotRay,
         raycast: ({ direction, maxDistance, origin }) =>
           raycastWorld({
@@ -355,21 +366,56 @@ export function useWeaponSystem({
         return
       }
 
+      const vfxController = vfxControllerRef.current
       const firedShot: FiredShot = {
         ...shotResult,
         ray: shotRay,
       }
+      const pendingEnemyDamage = new Map<number, number>()
+      const hitPoints: [number, number, number][] = []
+      const spawnedProjectiles: WeaponProjectile[] = []
 
-      setShotSequence((currentShotSequence) => currentShotSequence + 1)
-      spawnMuzzleFlash(firedShot)
+      shotSequenceRef.current += 1
+
+      const muzzleFlash = createMuzzleFlash(
+        effectIdRef.current++,
+        camera,
+        muzzleWorldPositionRef,
+        firedShot,
+        shotNowMs,
+      )
+
+      if (muzzleFlash) {
+        vfxController?.spawnMuzzleFlash(muzzleFlash)
+      }
+
       shotResult.projectiles.forEach((projectile) => {
-        spawnProjectile(projectile)
+        spawnedProjectiles.push(createProjectile(effectIdRef.current++, projectile))
       })
 
-      const hitPoints: [number, number, number][] = []
+      if (spawnedProjectiles.length > 0) {
+        const activeProjectiles = projectilesRef.current
+
+        spawnedProjectiles.forEach((projectile) => {
+          activeProjectiles.push(projectile)
+        })
+
+        vfxController?.setProjectiles(activeProjectiles)
+      }
 
       shotResult.traces.forEach((trace) => {
-        spawnTracer(firedShot, trace)
+        const tracer = createTracer(
+          effectIdRef.current++,
+          camera,
+          muzzleWorldPositionRef,
+          firedShot,
+          trace,
+          shotNowMs,
+        )
+
+        if (tracer) {
+          vfxController?.spawnTracer(tracer)
+        }
 
         if (!trace.hit) {
           return
@@ -378,17 +424,35 @@ export function useWeaponSystem({
         hitPoints.push(trace.hit.point)
 
         if (trace.hit.targetType === 'enemy') {
-          applyDamageToEnemyByCollider(trace.hit.colliderHandle, {
-            amount: trace.damage,
-            source: shotResult.definition.id,
-          })
+          pendingEnemyDamage.set(
+            trace.hit.colliderHandle,
+            (pendingEnemyDamage.get(trace.hit.colliderHandle) ?? 0) +
+              trace.damage,
+          )
         }
 
-        spawnHitMarker(firedShot, trace.hit.point, trace.hit.normal)
+        const hitMarker = createHitMarker(
+          effectIdRef.current++,
+          firedShot,
+          trace.hit.point,
+          trace.hit.normal,
+          shotNowMs,
+        )
+
+        if (hitMarker) {
+          vfxController?.spawnHitMarker(hitMarker)
+        }
+      })
+
+      pendingEnemyDamage.forEach((totalDamage, colliderHandle) => {
+        applyDamageToEnemyByCollider(colliderHandle, {
+          amount: totalDamage,
+          source: shotResult.definition.id,
+        })
       })
 
       if (hitPoints.length > 0) {
-        console.log(`${shotResult.definition.displayName} hit`, hitPoints)
+        debugGameLog(`${shotResult.definition.displayName} hit`, hitPoints)
       }
     }
 
@@ -401,10 +465,12 @@ export function useWeaponSystem({
     bodyRef,
     camera,
     currentWeaponId,
+    muzzleWorldPositionRef,
     playerAlive,
     pointerLocked,
     rapier,
     runState,
+    vfxControllerRef,
     world,
   ])
 
@@ -414,15 +480,8 @@ export function useWeaponSystem({
         return
       }
 
-      effectTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
-      effectTimeoutsRef.current = []
       projectilesRef.current = []
-      setExplosions([])
-      setHitMarkers([])
-      setMuzzleFlashes([])
-      setProjectiles([])
-      setShotSequence(0)
-      setTracers([])
+      vfxControllerRef.current?.clear()
       effectsClearedRef.current = true
       return
     }
@@ -435,43 +494,11 @@ export function useWeaponSystem({
       return
     }
 
-    const spawnExplosion = (
-      projectile: WeaponProjectile,
-      position: [number, number, number],
-    ) => {
-      const id = effectIdRef.current++
-      const createdAt = performance.now()
+    const nowMs = performance.now()
+    let writeIndex = 0
+    let projectileCountChanged = false
 
-      setExplosions((currentExplosions) => [
-        ...currentExplosions,
-        {
-          color: projectile.explosionColor,
-          createdAt,
-          glowColor: projectile.explosionGlowColor,
-          id,
-          lifetimeMs: projectile.explosionLifetimeMs,
-          position,
-          ringColor: projectile.explosionRingColor,
-          ringSize: projectile.explosionRingSize,
-          size: projectile.explosionSize,
-        },
-      ])
-
-      const timeoutId = window.setTimeout(() => {
-        setExplosions((currentExplosions) =>
-          currentExplosions.filter((explosion) => explosion.id !== id),
-        )
-        effectTimeoutsRef.current = effectTimeoutsRef.current.filter(
-          (trackedTimeoutId) => trackedTimeoutId !== timeoutId,
-        )
-      }, projectile.explosionLifetimeMs)
-
-      effectTimeoutsRef.current.push(timeoutId)
-    }
-
-    const nextProjectiles: WeaponProjectile[] = []
-
-    activeProjectiles.forEach((projectile) => {
+    activeProjectiles.forEach((projectile, readIndex) => {
       const stepDistance = projectile.speed * delta
       const hit = raycastWorld({
         direction: projectile.direction,
@@ -492,8 +519,24 @@ export function useWeaponSystem({
           },
         )
 
-        console.log('Rocket exploded', hit.point, `${damagedEnemies} enemies hit`)
-        spawnExplosion(projectile, hit.point)
+        debugGameLog(
+          'Rocket exploded',
+          hit.point,
+          `${damagedEnemies} enemies hit`,
+        )
+
+        const explosion = createExplosion(
+          effectIdRef.current++,
+          projectile,
+          hit.point,
+          nowMs,
+        )
+
+        if (explosion) {
+          vfxControllerRef.current?.spawnExplosion(explosion)
+        }
+
+        projectileCountChanged = true
         return
       }
 
@@ -514,32 +557,48 @@ export function useWeaponSystem({
           },
         )
 
-        console.log(
+        debugGameLog(
           'Rocket exploded',
           nextPosition,
           `${damagedEnemies} enemies hit`,
         )
-        spawnExplosion(projectile, nextPosition)
+
+        const explosion = createExplosion(
+          effectIdRef.current++,
+          projectile,
+          nextPosition,
+          nowMs,
+        )
+
+        if (explosion) {
+          vfxControllerRef.current?.spawnExplosion(explosion)
+        }
+
+        projectileCountChanged = true
         return
       }
 
-      nextProjectiles.push({
-        ...projectile,
-        distanceTraveled: nextDistanceTraveled,
-        position: nextPosition,
-      })
+      projectile.distanceTraveled = nextDistanceTraveled
+      projectile.position[0] = nextPosition[0]
+      projectile.position[1] = nextPosition[1]
+      projectile.position[2] = nextPosition[2]
+
+      activeProjectiles[writeIndex] = projectile
+      projectileCountChanged ||= writeIndex !== readIndex
+      writeIndex += 1
     })
 
-    projectilesRef.current = nextProjectiles
-    setProjectiles(nextProjectiles)
+    if (writeIndex !== activeProjectiles.length) {
+      activeProjectiles.length = writeIndex
+      projectileCountChanged = true
+    }
+
+    if (projectileCountChanged) {
+      vfxControllerRef.current?.setProjectiles(activeProjectiles)
+    }
   })
 
   return {
-    explosions,
-    hitMarkers,
-    muzzleFlashes,
-    projectiles,
-    shotSequence,
-    tracers,
+    shotSequenceRef,
   }
 }

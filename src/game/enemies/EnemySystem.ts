@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { addScore } from '../core/state/scoreStore.ts'
 import { applyDamage, createHealthState } from '../health/DamageSystem.ts'
 import type { DamageEvent } from '../health/HealthTypes.ts'
+import { debugGameLog } from '../../shared/constants/debug.ts'
 import { getEnemyTypeDefinition } from './EnemyDefinitions.ts'
 import {
   createWaveEnemySpawnDefinitions,
@@ -28,6 +29,12 @@ type EnemyStore = {
 
 const enemyPositionSnapshots = new Map<EnemyId, [number, number, number]>()
 
+type RadiusDamageResult = {
+  damagedEnemies: number
+  nextEnemies: EnemyState[] | null
+  scoreAward: number
+}
+
 function getSnapshotPosition(
   enemyId: EnemyId,
   fallbackPosition: [number, number, number],
@@ -49,6 +56,69 @@ function createWaveEnemyStates(waveNumber: number): EnemyState[] {
 
 function clearEnemyPositionSnapshots() {
   enemyPositionSnapshots.clear()
+}
+
+function applyRadiusDamageToEnemies(
+  enemies: EnemyState[],
+  center: [number, number, number],
+  radius: number,
+  damageEvent: DamageEvent,
+): RadiusDamageResult {
+  const radiusSquared = radius * radius
+  let damagedEnemies = 0
+  let nextEnemies: EnemyState[] | null = null
+  let scoreAward = 0
+
+  enemies.forEach((enemy, index) => {
+    if (!enemy.alive) {
+      return
+    }
+
+    const enemyPosition = getSnapshotPosition(enemy.id, enemy.position)
+    const enemyTypeDefinition = getEnemyTypeDefinition(enemy.type)
+    const dx = center[0] - enemyPosition[0]
+    const dy = center[1] - (enemyPosition[1] + enemyTypeDefinition.colliderOffsetY)
+    const dz = center[2] - enemyPosition[2]
+    const distanceSquared = dx * dx + dy * dy + dz * dz
+
+    if (distanceSquared > radiusSquared) {
+      return
+    }
+
+    const damageResult = applyDamage(enemy, damageEvent)
+
+    if (damageResult.appliedDamage <= 0) {
+      return
+    }
+
+    if (!nextEnemies) {
+      nextEnemies = [...enemies]
+    }
+
+    nextEnemies[index] = {
+      ...enemy,
+      alive: damageResult.alive,
+      currentHealth: damageResult.currentHealth,
+    }
+
+    damagedEnemies += 1
+
+    debugGameLog(
+      `Enemy ${enemy.id} took ${damageResult.appliedDamage} damage from ${damageEvent.source}. ${damageResult.currentHealth}/${damageResult.maxHealth} health remaining.`,
+    )
+
+    if (damageResult.died) {
+      debugGameLog(`Enemy ${enemy.id} died.`)
+      enemyPositionSnapshots.delete(enemy.id)
+      scoreAward += enemyTypeDefinition.scoreValue
+    }
+  })
+
+  return {
+    damagedEnemies,
+    nextEnemies,
+    scoreAward,
+  }
 }
 
 const useEnemyStore = create<EnemyStore>((set) => ({
@@ -86,12 +156,12 @@ const useEnemyStore = create<EnemyStore>((set) => ({
         return state
       }
 
-      console.log(
+      debugGameLog(
         `Enemy ${enemy.id} took ${damageResult.appliedDamage} damage from ${damageEvent.source}. ${damageResult.currentHealth}/${damageResult.maxHealth} health remaining.`,
       )
 
       if (damageResult.died) {
-        console.log(`Enemy ${enemy.id} died.`)
+        debugGameLog(`Enemy ${enemy.id} died.`)
         enemyPositionSnapshots.delete(enemy.id)
         addScore(getEnemyTypeDefinition(enemy.type).scoreValue, `${enemy.id}:kill`)
       }
@@ -128,7 +198,7 @@ const useEnemyStore = create<EnemyStore>((set) => ({
           return state
         }
 
-        console.log(`Wave ${state.currentWave} complete.`)
+        debugGameLog(`Wave ${state.currentWave} complete.`)
         addScore(
           ENEMY_WAVE_CONFIG.waveCompleteBonus,
           `wave-${state.currentWave}:complete`,
@@ -150,7 +220,7 @@ const useEnemyStore = create<EnemyStore>((set) => ({
       }
 
       const nextWave = state.currentWave + 1
-      console.log(`Wave ${nextWave} started.`)
+      debugGameLog(`Wave ${nextWave} started.`)
 
       return {
         currentWave: nextWave,
@@ -194,29 +264,32 @@ export function applyDamageToEnemiesInRadius(
   radius: number,
   damageEvent: DamageEvent,
 ) {
-  const { damageEnemy, enemies } = useEnemyStore.getState()
   let damagedEnemies = 0
+  let scoreAward = 0
 
-  enemies.forEach((enemy) => {
-    if (!enemy.alive) {
-      return
-    }
-
-    const enemyPosition = getSnapshotPosition(enemy.id, enemy.position)
-    const enemyTypeDefinition = getEnemyTypeDefinition(enemy.type)
-    const distanceToExplosion = Math.hypot(
-      center[0] - enemyPosition[0],
-      center[1] - (enemyPosition[1] + enemyTypeDefinition.colliderOffsetY),
-      center[2] - enemyPosition[2],
+  useEnemyStore.setState((state) => {
+    const radiusDamageResult = applyRadiusDamageToEnemies(
+      state.enemies,
+      center,
+      radius,
+      damageEvent,
     )
 
-    if (distanceToExplosion > radius) {
-      return
+    damagedEnemies = radiusDamageResult.damagedEnemies
+    scoreAward = radiusDamageResult.scoreAward
+
+    if (!radiusDamageResult.nextEnemies) {
+      return state
     }
 
-    damageEnemy(enemy.id, damageEvent)
-    damagedEnemies += 1
+    return {
+      enemies: radiusDamageResult.nextEnemies,
+    }
   })
+
+  if (scoreAward > 0) {
+    addScore(scoreAward, `${damageEvent.source}:radius-kill`)
+  }
 
   return damagedEnemies
 }

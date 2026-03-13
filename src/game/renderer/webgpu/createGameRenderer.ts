@@ -7,6 +7,7 @@ import {
 } from 'three'
 import { WebGPURenderer } from 'three/webgpu'
 
+import { ARENA_RENDERER_VISUALS } from '../../config/arenaVisuals.ts'
 import { useRendererStore } from '../state/rendererStore.ts'
 import type { RendererMode } from '../../../shared/types/renderer.ts'
 
@@ -23,17 +24,15 @@ type BackendFlags = {
   isWebGPUBackend?: boolean
 }
 
-const CLEAR_COLOR = '#c9d2de'
-
 function configureRenderer<TRenderer extends RenderSurface>(
   renderer: TRenderer,
 ): TRenderer {
-  renderer.setClearColor(CLEAR_COLOR)
+  renderer.setClearColor(ARENA_RENDERER_VISUALS.clearColor)
   renderer.outputColorSpace = SRGBColorSpace
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = PCFSoftShadowMap
   renderer.toneMapping = ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.1
+  renderer.toneMappingExposure = ARENA_RENDERER_VISUALS.toneMappingExposure
 
   return renderer
 }
